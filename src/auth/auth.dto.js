@@ -1,15 +1,46 @@
 export const RegisterDTO = {
     type: "object",
-    required: ["mobile", "email"],
+    required: ["mobile"],
     properties: {
         mobile: {
             type: "string",
-            example: "9876543210"
+            example: "+919876543210"
         },
         email: {
             type: "string",
             format: "email",
+            nullable: true,
             example: "user@gmail.com"
+        },
+        full_name: {
+            type: "string",
+            example: "Ramesh Kumar"
+        },
+        crop_id: {
+            type: "integer",
+            nullable: true,
+            example: 1
+        },
+        country: {
+            type: "string",
+            default: "India",
+            example: "India"
+        },
+        district: {
+            type: "string",
+            example: "Hyderabad"
+        },
+        state: {
+            type: "string",
+            example: "Telangana"
+        },
+        pincode: {
+            type: "string",
+            example: "500081"
+        },
+        village: {
+            type: "string",
+            example: "Madhapur"
         }
     }
 };

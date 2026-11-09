@@ -36,18 +36,96 @@ const createToken = (user) => {
 };
 
 // REGISTER USER
-export const registerUser = async ({ mobile, email }) => {
+export const registerUser = async ({
+    mobile,
+    email,
+    full_name,
+    crop_id,
+    country,
+    district,
+    state,
+    pincode,
+    village
+}) => {
+
     const normalizedMobile = normalizeMobile(mobile);
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = email?.trim().toLowerCase() || null;
 
     const result = await pool.query(
-        `INSERT INTO users (mobile, email)
-         VALUES ($1, $2)
-         RETURNING id, mobile, email, created_at`,
-        [normalizedMobile, normalizedEmail]
+        `INSERT INTO users (
+            mobile,
+            email,
+            full_name,
+            crop_id,
+            country,
+            district,
+            state,
+            pincode,
+            village
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+
+        ON CONFLICT (mobile) DO NOTHING
+
+        RETURNING
+            id,
+            mobile,
+            email,
+            full_name,
+            crop_id,
+            country,
+            district,
+            state,
+            pincode,
+            village,
+            created_at`,
+        [
+            normalizedMobile,
+            normalizedEmail,
+            full_name?.trim() || null,
+            crop_id || null,
+            country?.trim() || "India",
+            district?.trim() || null,
+            state?.trim() || null,
+            pincode?.trim() || null,
+            village?.trim() || null
+        ]
     );
 
-    return result.rows[0];
+    if (result.rows.length > 0) {
+        return {
+            user: result.rows[0],
+            alreadyRegistered: false
+        };
+    }
+
+    // Existing mobile: return existing user without updating
+    const existingUser = await pool.query(
+        `SELECT
+            id,
+            mobile,
+            email,
+            full_name,
+            crop_id,
+            country,
+            district,
+            state,
+            pincode,
+            village,
+            created_at
+         FROM users
+         WHERE mobile = $1`,
+        [normalizedMobile]
+    );
+
+    if (existingUser.rows.length > 0) {
+        return {
+            user: existingUser.rows[0],
+            alreadyRegistered: true
+        };
+    }
+
+    throw new Error("Unable to register user.");
 };
 
 // SEND OTP TO REGISTERED EMAIL

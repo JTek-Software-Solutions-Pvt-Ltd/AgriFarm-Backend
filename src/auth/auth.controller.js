@@ -6,12 +6,23 @@ import {
 
 export const register = async (req, res) => {
     try {
-        const { mobile, email } = req.body;
+        const {
+            mobile,
+            email,
+            full_name,
+            crop_id,
+            country,
+            district,
+            state,
+            pincode,
+            village
+        } = req.body;
 
-        if (!mobile || !email) {
+        // Mobile is compulsory
+        if (!mobile || !mobile.trim()) {
             return res.status(400).json({
                 success: false,
-                message: "Mobile number and email are required."
+                message: "Mobile number is required."
             });
         }
 
@@ -22,26 +33,57 @@ export const register = async (req, res) => {
             });
         }
 
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        // Email is optional
+        if (
+            email &&
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+        ) {
             return res.status(400).json({
                 success: false,
                 message: "Enter a valid email address."
             });
         }
 
-        const user = await registerUser({ mobile, email });
+        const result = await registerUser({
+            mobile,
+            email,
+            full_name,
+            crop_id,
+            country,
+            district,
+            state,
+            pincode,
+            village
+        });
+
+        if (result.alreadyRegistered) {
+            return res.status(200).json({
+                success: true,
+                alreadyRegistered: true,
+                message: "This mobile number is already registered.",
+                data: result.user
+            });
+        }
 
         return res.status(201).json({
             success: true,
+            alreadyRegistered: false,
             message: "User registered successfully.",
-            data: user
+            data: result.user
         });
 
     } catch (error) {
         if (error.code === "23505") {
             return res.status(409).json({
                 success: false,
-                message: "Mobile number or email is already registered."
+                message: "Email address is already registered."
+            });
+        }
+
+        if (error.code === "23503") {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid crop ID."
             });
         }
 
@@ -53,7 +95,6 @@ export const register = async (req, res) => {
         });
     }
 };
-
 export const requestOTP = async (req, res, next) => {
     try {
         const { mobile, email } = req.body;

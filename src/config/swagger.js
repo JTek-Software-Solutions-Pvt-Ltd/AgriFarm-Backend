@@ -1,4 +1,6 @@
 import { authSchemas, authPaths } from "../auth/auth.dto.js";
+import { cropSchemas, cropPaths } from "../crop/crop.dto.js";
+
 
 const swaggerSpec = {
 
@@ -12,7 +14,8 @@ const swaggerSpec = {
 
     servers: [
         {
-            url: "http://20.12.240.74:7000"
+            //url: "http://20.12.240.74:7000"
+            url: process.env.BACKEND_URL
         }
     ],
 
@@ -33,12 +36,14 @@ const swaggerSpec = {
         },
 
         schemas: {
-            ...authSchemas
+            ...authSchemas,
+            ...cropSchemas
         }
     },
 
     paths: {
-        ...authPaths
+        ...authPaths,
+        ...cropPaths
     }
 };
 
