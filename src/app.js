@@ -9,7 +9,17 @@ import { registerRoutes } from "./routes/index.js";
 
 const app = express();
 
-app.use(helmet());
+app.use(
+    helmet({
+        hsts: false,
+        contentSecurityPolicy: {
+            directives: {
+                ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+                "upgrade-insecure-requests": null
+            }
+        }
+    })
+);
 app.use(cors());
 app.use(express.json());
 
