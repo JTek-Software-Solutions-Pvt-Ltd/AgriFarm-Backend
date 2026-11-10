@@ -20,6 +20,7 @@ app.use(
         }
     })
 );
+
 app.use(cors());
 app.use(express.json());
 
@@ -33,11 +34,29 @@ app.use(
 // Application routes
 registerRoutes(app);
 
-// 404 handler - keep this last
+// 404 handler - keep this before global error handler
 app.use((req, res) => {
     res.status(404).json({
         success: false,
         message: "API endpoint not found."
+    });
+});
+
+// GLOBAL ERROR HANDLER
+// Global error handler
+app.use((err, req, res, next) => {
+
+    const statusCode = err.statusCode || 500;
+
+    // Log only unexpected server errors
+    if (statusCode >= 500) {
+        console.error("Server Error:", err);
+    }
+
+    return res.status(statusCode).json({
+        success: false,
+        statusCode,
+        message: err.message || "Internal server error."
     });
 });
 
