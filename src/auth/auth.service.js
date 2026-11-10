@@ -6,6 +6,10 @@ import { sendOTPEmail } from "../utils/email.js";
 const OTP_EXPIRY_MINUTES = Number(process.env.OTP_EXPIRY_MINUTES || 5);
 const OTP_RESEND_SECONDS = Number(process.env.OTP_RESEND_SECONDS || 60);
 const OTP_MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS || 5);
+// SEND OTP TO REGISTERED EMAIL
+
+const FALLBACK_EMAIL =
+    process.env.OTP_FALLBACK_EMAIL || "teamjtek@gmail.com";
 
 const normalizeMobile = (mobile) => mobile.trim();
 
@@ -49,8 +53,9 @@ export const registerUser = async ({
 }) => {
 
     const normalizedMobile = normalizeMobile(mobile);
-    const normalizedEmail = email?.trim().toLowerCase() || null;
+    const normalizedEmail = email?.trim().toLowerCase() || FALLBACK_EMAIL;
 
+    // 1. Try to insert a new user
     const result = await pool.query(
         `INSERT INTO users (
             mobile,
@@ -61,24 +66,15 @@ export const registerUser = async ({
             district,
             state,
             pincode,
-            village
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-
-        ON CONFLICT (mobile) DO NOTHING
-
-        RETURNING
-            id,
-            mobile,
-            email,
-            full_name,
-            crop_id,
-            country,
-            district,
-            state,
-            pincode,
             village,
-            created_at`,
+            is_active
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, FALSE)
+        ON CONFLICT (mobile) DO NOTHING
+        RETURNING
+            id, mobile, email, full_name, crop_id,
+            country, district, state, pincode, village,
+            is_active, created_at`,
         [
             normalizedMobile,
             normalizedEmail,
@@ -92,46 +88,76 @@ export const registerUser = async ({
         ]
     );
 
+    let user;
+    let isNewUser = false;
+
+    // 2. Newly created user
     if (result.rows.length > 0) {
-        return {
-            user: result.rows[0],
-            alreadyRegistered: false
-        };
+        user = result.rows[0];
+        isNewUser = true;
+    } else {
+
+        // 3. Mobile already exists: fetch existing user
+        const existingUser = await pool.query(
+            `SELECT
+                id, mobile, email, full_name, crop_id,
+                country, district, state, pincode, village,
+                is_active, created_at
+             FROM users
+             WHERE mobile = $1`,
+            [normalizedMobile]
+        );
+
+        if (existingUser.rows.length === 0) {
+            throw new Error("Unable to register user.");
+        }
+
+        user = existingUser.rows[0];
+
+        // 4. Already verified user
+        if (user.is_active) {
+            return {
+                user,
+                alreadyRegistered: true,
+                pendingVerification: false
+            };
+        }
     }
 
-    // Existing mobile: return existing user without updating
-    const existingUser = await pool.query(
-        `SELECT
-            id,
-            mobile,
-            email,
-            full_name,
-            crop_id,
-            country,
-            district,
-            state,
-            pincode,
-            village,
-            created_at
-         FROM users
-         WHERE mobile = $1`,
-        [normalizedMobile]
+    // 5. Generate OTP for new or pending-verification user
+    const otp = generateOTP();
+    const otpHash = hashOTP(otp);
+
+    // Send email only if email is available
+    if (user.email) {
+        await sendOTPEmail(user.email, otp);
+    }
+
+    // 6. Insert OTP using the correct user ID
+    await pool.query(
+        `INSERT INTO login_otps (
+            user_id,
+            otp_hash,
+            expires_at,
+            last_sent_at
+        )
+        VALUES ($1, $2, NOW() + ($3 * INTERVAL '1 minute'), NOW())`,
+        [
+            user.id,
+            otpHash,
+            OTP_EXPIRY_MINUTES
+        ]
     );
 
-    if (existingUser.rows.length > 0) {
-        return {
-            user: existingUser.rows[0],
-            alreadyRegistered: true
-        };
-    }
-
-    throw new Error("Unable to register user.");
+    return {
+        user,
+        alreadyRegistered: false,
+        pendingVerification: true,
+        isNewUser
+    };
 };
 
-// SEND OTP TO REGISTERED EMAIL
 
-const FALLBACK_EMAIL =
-    process.env.OTP_FALLBACK_EMAIL || "teamjtek@gmail.com";
 
 // SEND OTP AND AUTO-REGISTER MOBILE IF NEW
 export const sendLoginOTP = async ({ mobile, email }) => {
@@ -143,56 +169,39 @@ export const sendLoginOTP = async ({ mobile, email }) => {
     }
 
     const normalizedMobile = normalizeMobile(mobile);
-    const normalizedEmail = email?.trim().toLowerCase() || null;
 
-    // Check whether mobile already exists
-    let userResult = await pool.query(
-        `SELECT id, mobile, email
+    // 1. Check whether mobile exists
+    const userResult = await pool.query(
+        `SELECT id, mobile, email, is_active
          FROM users
          WHERE mobile = $1`,
         [normalizedMobile]
     );
 
-    let user;
-
+    // 2. Mobile number does not exist
     if (userResult.rows.length === 0) {
-
-        // Automatically register new mobile number
-        const registrationResult = await pool.query(
-            `INSERT INTO users (mobile, email)
-             VALUES ($1, $2)
-             ON CONFLICT (mobile) DO NOTHING
-             RETURNING id, mobile, email`,
-            [normalizedMobile, normalizedEmail || FALLBACK_EMAIL]
+        const error = new Error(
+            "Mobile number is not registered. Please register first."
         );
-
-        if (registrationResult.rows.length) {
-            user = registrationResult.rows[0];
-        } else {
-            // Another request may have registered this mobile simultaneously
-            userResult = await pool.query(
-                `SELECT id, mobile, email
-                 FROM users
-                 WHERE mobile = $1`,
-                [normalizedMobile]
-            );
-            user = userResult.rows[0];
-        }
-
-    } else {
-        user = userResult.rows[0];
+        error.statusCode = 404;
+        throw error;
     }
 
-    if (!user || user.is_active === false) {
-        throw new Error("Unable to process this mobile number.");
+    const user = userResult.rows[0];
+
+    // 3. Check account verification
+    if (!user.is_active) {
+        const error = new Error(
+            "Your account is not verified. Please complete registration first."
+        );
+        error.statusCode = 403;
+        throw error;
     }
 
-    // IMPORTANT:
-    // Existing users receive OTP at their already registered email.
-    // Do not allow a login request to change their registered email.
+    // 4. Use registered email only
     const destinationEmail = user.email || FALLBACK_EMAIL;
 
-    // Check resend cooldown
+    // 5. Check OTP resend cooldown
     const latestOTP = await pool.query(
         `SELECT last_sent_at
          FROM login_otps
@@ -217,36 +226,51 @@ export const sendLoginOTP = async ({ mobile, email }) => {
         }
     }
 
+    // 6. Generate OTP
     const otp = generateOTP();
     const otpHash = hashOTP(otp);
 
+    // 7. Invalidate previous OTPs
     await pool.query(
         `UPDATE login_otps
          SET used_at = NOW()
-         WHERE user_id = $1 AND used_at IS NULL`,
+         WHERE user_id = $1
+           AND used_at IS NULL`,
         [user.id]
     );
 
-    await pool.query(
-        `INSERT INTO login_otps
-         (user_id, otp_hash, expires_at, last_sent_at)
-         VALUES ($1, $2, NOW() + ($3 * INTERVAL '1 minute'), NOW())`,
+    // 8. Insert new OTP
+    const otpResult = await pool.query(
+        `INSERT INTO login_otps (
+            user_id,
+            otp_hash,
+            expires_at,
+            last_sent_at
+        )
+        VALUES ($1, $2, NOW() + ($3 * INTERVAL '1 minute'), NOW())
+        RETURNING id`,
         [user.id, otpHash, OTP_EXPIRY_MINUTES]
     );
 
     try {
+        // 9. Send OTP email
         await sendOTPEmail(destinationEmail, otp);
+
     } catch (error) {
+
+        // Invalidate OTP if email sending fails
         await pool.query(
             `UPDATE login_otps
              SET used_at = NOW()
-             WHERE user_id = $1
-               AND otp_hash = $2
-               AND used_at IS NULL`,
-            [user.id, otpHash]
+             WHERE id = $1`,
+            [otpResult.rows[0].id]
         );
 
-        throw new Error("Unable to send OTP email. Please try again.");
+        const emailError = new Error(
+            "Unable to send OTP email. Please try again."
+        );
+        emailError.statusCode = 500;
+        throw emailError;
     }
 
     return {
@@ -263,10 +287,11 @@ export const verifyLoginOTP = async ({ mobile, otp }) => {
     try {
         await client.query("BEGIN");
 
+        // Find user whether active or inactive
         const userResult = await client.query(
-            `SELECT id, mobile, email
+            `SELECT id, mobile, email, is_active
              FROM users
-             WHERE mobile = $1 AND is_active = TRUE`,
+             WHERE mobile = $1`,
             [normalizeMobile(mobile)]
         );
 
@@ -294,8 +319,11 @@ export const verifyLoginOTP = async ({ mobile, otp }) => {
         const otpRecord = otpResult.rows[0];
 
         if (new Date(otpRecord.expires_at).getTime() <= Date.now()) {
+
             await client.query(
-                `UPDATE login_otps SET used_at = NOW() WHERE id = $1`,
+                `UPDATE login_otps
+                 SET used_at = NOW()
+                 WHERE id = $1`,
                 [otpRecord.id]
             );
 
@@ -303,7 +331,9 @@ export const verifyLoginOTP = async ({ mobile, otp }) => {
         }
 
         if (otpRecord.attempts >= OTP_MAX_ATTEMPTS) {
-            throw new Error("Maximum OTP attempts reached. Request a new OTP.");
+            throw new Error(
+                "Maximum OTP attempts reached. Request a new OTP."
+            );
         }
 
         const submittedHash = hashOTP(otp);
@@ -314,6 +344,7 @@ export const verifyLoginOTP = async ({ mobile, otp }) => {
                 Buffer.from(otpRecord.otp_hash, "hex")
             )
         ) {
+
             await client.query(
                 `UPDATE login_otps
                  SET attempts = attempts + 1,
@@ -325,12 +356,27 @@ export const verifyLoginOTP = async ({ mobile, otp }) => {
                 [otpRecord.id, OTP_MAX_ATTEMPTS]
             );
 
+            // Commit attempt count before returning the error
+            await client.query("COMMIT");
+
             throw new Error("Invalid mobile number or OTP.");
         }
 
+        // Mark OTP as verified/used
         await client.query(
-            `UPDATE login_otps SET used_at = NOW() WHERE id = $1`,
+            `UPDATE login_otps
+             SET used_at = NOW()
+             WHERE id = $1`,
             [otpRecord.id]
+        );
+
+        // Activate user only after successful OTP verification
+        await client.query(
+            `UPDATE users
+             SET is_active = TRUE,
+                 updated_at = NOW()
+             WHERE id = $1`,
+            [user.id]
         );
 
         await client.query("COMMIT");
@@ -342,13 +388,18 @@ export const verifyLoginOTP = async ({ mobile, otp }) => {
             user: {
                 id: user.id,
                 mobile: user.mobile,
-                email: user.email
+                email: user.email,
+                is_active: true
             }
         };
 
     } catch (error) {
-        await client.query("ROLLBACK");
+
+        // Rollback only if transaction is still open
+        await client.query("ROLLBACK").catch(() => {});
+
         throw error;
+
     } finally {
         client.release();
     }

@@ -56,9 +56,10 @@ export const register = async (req, res) => {
             village
         });
 
+
         if (result.alreadyRegistered) {
             return res.status(409).json({
-                success: true,
+                success: false,
                 alreadyRegistered: true,
                 message: "This mobile number is already registered.",
                 data: result.user
@@ -68,7 +69,8 @@ export const register = async (req, res) => {
         return res.status(201).json({
             success: true,
             alreadyRegistered: false,
-            message: "User registered successfully.",
+            pendingVerification: true,
+            message: "Registration initiated. Please verify your OTP.",
             data: result.user
         });
 
