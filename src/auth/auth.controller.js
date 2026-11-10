@@ -57,7 +57,7 @@ export const register = async (req, res) => {
         });
 
         if (result.alreadyRegistered) {
-            return res.status(200).json({
+            return res.status(409).json({
                 success: true,
                 alreadyRegistered: true,
                 message: "This mobile number is already registered.",
