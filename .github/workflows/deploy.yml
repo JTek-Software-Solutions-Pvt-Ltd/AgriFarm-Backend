@@ -1,39 +1,70 @@
-- name: Deploy backend
-  shell: bash
-  env:
+
+name: Deploy Kisan Dost Backend
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Azure VM
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          VM_SSH_PRIVATE_KEY: ${{ secrets.AZURE_VM_SSH_PRIVATE_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.AZURE_VM_KNOWN_HOSTS }}
+        run: |
+          set -e
+
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+
+          printf '%s\n' "$VM_SSH_PRIVATE_KEY" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/deploy_key"
+
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+          echo "SSH configuration completed."
+
+      - name: Deploy backend
+        shell: bash
+        env:
           VM_HOST: ${{ secrets.AZURE_VM_HOST }}
           VM_USER: ${{ secrets.AZURE_VM_USER }}
         run: |
           set -e
- 
-          if [ -z "$VM_HOST" ]; then
-            echo "ERROR: AZURE_VM_HOST secret is missing"
+
+          if [ -z "$VM_HOST" ] || [ -z "$VM_USER" ]; then
+            echo "Missing Azure VM secrets."
             exit 1
           fi
- 
-          if [ -z "$VM_USER" ]; then
-            echo "ERROR: AZURE_VM_USER secret is missing"
-            exit 1
-          fi
- 
+
           echo "Connecting to Azure VM..."
- 
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "$VM_USER@$VM_HOST" 'bash -se' <<'REMOTE'
-            set -e
- 
-            cd /home/azureuser/kisandost/backend
- 
-            echo "Pulling latest code..."
-            git pull --ff-only origin main
- 
-            echo "Installing production dependencies..."
-            npm install --omit=dev
- 
-            echo "Restarting backend..."
-            pm2 restart kisandost-backend --update-env
- 
-            echo "Checking backend..."
-            curl -fsS http://127.0.0.1:7000/api-docs/ -o /dev/null
- 
-            echo "Deployment successful!"
-          REMOTE
+
+          cat > /tmp/deploy_remote.sh <<'REMOTE_SCRIPT'
+          set -e
+
+          cd /home/azureuser/kisandost/backend
+
+          echo "Pulling latest code..."
+          git pull --ff-only origin main
+
+          echo "Installing production dependencies..."
+          npm install --omit=dev
+
+          echo "Restarting backend..."
+          pm2 restart kisandost-backend --update-env
+
+          echo "Checking backend..."
+          curl -fsS http://127.0.0.1:7000/api-docs/ -o /dev/null
+
+          echo "Deployment successful!"
+          REMOTE_SCRIPT
+
+          ssh -i "$HOME/.ssh/deploy_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$VM_USER@$VM_HOST" 'bash -s' < /tmp/deploy_remote.sh
