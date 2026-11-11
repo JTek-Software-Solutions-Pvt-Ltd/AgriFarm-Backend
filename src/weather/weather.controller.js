@@ -71,7 +71,7 @@ const validateCoordinates = (latitude, longitude) => {
     return null;
 };
 
-// Current weather
+// Current weather Fetching
 export const currentWeather = async (req, res, next) => {
     try {
 
