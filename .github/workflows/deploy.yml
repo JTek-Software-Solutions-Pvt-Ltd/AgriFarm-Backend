@@ -3,9 +3,8 @@ name: Deploy Kisan Dost Backend
 
 on:
   workflow_dispatch:
-
   push:
-    branches: 
+    branches:
       - main
 
 permissions:
@@ -24,7 +23,6 @@ jobs:
           VM_KNOWN_HOSTS: ${{ secrets.AZURE_VM_KNOWN_HOSTS }}
         run: |
           set -e
-
           mkdir -p "$HOME/.ssh"
           chmod 700 "$HOME/.ssh"
 
@@ -34,7 +32,7 @@ jobs:
           printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-          echo "SSH configuration completed."
+          echo "SSH configured."
 
       - name: Deploy backend
         shell: bash
@@ -44,20 +42,16 @@ jobs:
         run: |
           set -e
 
-          if [ -z "$VM_HOST" ] || [ -z "$VM_USER" ]; then
-            echo "Missing Azure VM secrets."
-            exit 1
-          fi
-
-          echo "Connecting to Azure VM..."
-
           cat > /tmp/deploy_remote.sh <<'REMOTE_SCRIPT'
-          set -e
+          set -euo pipefail
 
           cd /home/azureuser/kisandost/backend
 
-          echo "Pulling latest code..."
-          git pull --ff-only origin main
+          echo "Fetching latest GitHub code..."
+          git fetch origin main
+
+          echo "Updating application to origin/main..."
+          git merge --ff-only origin/main
 
           echo "Installing production dependencies..."
           npm install --omit=dev
@@ -65,27 +59,33 @@ jobs:
           echo "Restarting backend..."
           pm2 restart kisandost-backend --update-env
 
-          echo "Waiting for backend to become ready..."
+          echo "Waiting for backend..."
+          ready=0
 
-          for i in {1..30}; do
+          for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:7000/api-docs/ -o /dev/null; then
-              echo "Backend is responding successfully!"
+              ready=1
               break
             fi
-          
-            if [ "$i" -eq 30 ]; then
-              echo "Backend failed to become ready."
-              pm2 logs kisandost-backend --lines 50 --nostream
-              exit 1
-            fi
-          
-            echo "Backend is starting... attempt $i/30"
             sleep 2
           done
-          
-          echo "Deployment successful!"
-          
-                    echo "Deployment successful!"
-                    REMOTE_SCRIPT
 
-          ssh -i "$HOME/.ssh/deploy_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$VM_USER@$VM_HOST" 'bash -s' < /tmp/deploy_remote.sh
+          if [ "$ready" -ne 1 ]; then
+            echo "Backend did not become ready."
+            pm2 logs kisandost-backend --lines 50 --nostream
+            exit 1
+          fi
+
+          echo "Deployed commit:"
+          git rev-parse HEAD
+
+          echo "Deployment successful!"
+          REMOTE_SCRIPT
+
+          echo "Connecting to Azure VM..."
+
+          ssh -i "$HOME/.ssh/deploy_key" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VM_USER@$VM_HOST" 'bash -s' < /tmp/deploy_remote.sh
