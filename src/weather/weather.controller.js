@@ -5,7 +5,7 @@ import {
     getUserCoordinates
 } from "./weather.service.js";
 
-// Resolve coordinates from request or user table testdata
+// Resolve coordinates from request or user table testdata check
 const resolveCoordinates = async (query) => {
 
     const { latitude, longitude, user_id } = query;
