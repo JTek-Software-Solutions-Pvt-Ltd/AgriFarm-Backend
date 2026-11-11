@@ -1,0 +1,89 @@
+
+
+name: Deploy Kisan Dost Backend
+ 
+on:
+
+  workflow_dispatch:
+ 
+permissions:
+
+  contents: read
+ 
+jobs:
+
+  deploy:
+
+    name: Deploy to Azure VM
+
+    runs-on: ubuntu-latest
+ 
+    steps:
+
+      - name: Configure SSH
+
+        env:
+
+          VM_HOST: ${{ secrets.AZURE_VM_HOST }}
+
+          VM_USER: ${{ secrets.AZURE_VM_USER }}
+
+          VM_SSH_PRIVATE_KEY: ${{ secrets.AZURE_VM_SSH_PRIVATE_KEY }}
+
+          VM_KNOWN_HOSTS: ${{ secrets.AZURE_VM_KNOWN_HOSTS }}
+
+        run: |
+
+          mkdir -p ~/.ssh
+
+          chmod 700 ~/.ssh
+ 
+          printf '%s\n' "$VM_SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+
+          chmod 600 ~/.ssh/deploy_key
+ 
+          printf '%s\n' "$VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+          chmod 600 ~/.ssh/known_hosts
+ 
+      - name: Deploy backend
+
+        env:
+
+          VM_HOST: ${{ secrets.AZURE_VM_HOST }}
+
+          VM_USER: ${{ secrets.AZURE_VM_USER }}
+
+        run: |
+
+          ssh -i ~/.ssh/deploy_key \
+
+            -o StrictHostKeyChecking=yes \
+
+            "$VM_USER@$VM_HOST" 'bash -se' <<'EOF'
+
+              set -e
+ 
+              cd /home/azureuser/kisandost/backend
+ 
+              echo "Pulling latest code..."
+
+              git pull --ff-only origin main
+ 
+              echo "Installing production dependencies..."
+
+              npm install --omit=dev
+ 
+              echo "Restarting backend..."
+
+              pm2 restart kisandost-backend --update-env
+ 
+              echo "Checking backend..."
+
+              curl -fsS http://127.0.0.1:7000/api-docs/ -o /dev/null
+ 
+              echo "Deployment successful!"
+
+          EOF
+
+ 
