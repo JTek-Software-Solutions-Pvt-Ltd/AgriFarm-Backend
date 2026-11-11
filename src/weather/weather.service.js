@@ -35,7 +35,7 @@ const DAILY_FIELDS = [
     "sunset",
     "wind_speed_10m_max"
 ];
-// Fetch Weather
+// Fetch Weather Report
 const fetchWeather = async (params) => {
     const query = new URLSearchParams(params);
 
