@@ -1,0 +1,87 @@
+
+name: Deploy Kisan Dost Backend
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Azure VM
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          VM_SSH_PRIVATE_KEY: ${{ secrets.AZURE_VM_SSH_PRIVATE_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.AZURE_VM_KNOWN_HOSTS }}
+        run: |
+          set -e
+
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+
+          printf '%s\n' "$VM_SSH_PRIVATE_KEY" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/deploy_key"
+
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+          echo "SSH configuration completed."
+
+      - name: Deploy backend
+        shell: bash
+        env:
+          VM_HOST: ${{ secrets.AZURE_VM_HOST }}
+          VM_USER: ${{ secrets.AZURE_VM_USER }}
+        run: |
+          set -e
+
+          if [ -z "$VM_HOST" ] || [ -z "$VM_USER" ]; then
+            echo "Missing Azure VM secrets."
+            exit 1
+          fi
+
+          echo "Connecting to Azure VM..."
+
+          cat > /tmp/deploy_remote.sh <<'REMOTE_SCRIPT'
+          set -e
+
+          cd /home/azureuser/kisandost/backend
+
+          echo "Pulling latest code..."
+          git pull --ff-only origin main
+
+          echo "Installing production dependencies..."
+          npm install --omit=dev
+
+          echo "Restarting backend..."
+          pm2 restart kisandost-backend --update-env
+
+          echo "Waiting for backend to become ready..."
+
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:7000/api-docs/ -o /dev/null; then
+              echo "Backend is responding successfully!"
+              break
+            fi
+          
+            if [ "$i" -eq 30 ]; then
+              echo "Backend failed to become ready."
+              pm2 logs kisandost-backend --lines 50 --nostream
+              exit 1
+            fi
+          
+            echo "Backend is starting... attempt $i/30"
+            sleep 2
+          done
+          
+          echo "Deployment successful!"
+          
+                    echo "Deployment successful!"
+                    REMOTE_SCRIPT
+
+          ssh -i "$HOME/.ssh/deploy_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$VM_USER@$VM_HOST" 'bash -s' < /tmp/deploy_remote.sh
