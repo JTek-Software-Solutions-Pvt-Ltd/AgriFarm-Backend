@@ -49,7 +49,9 @@ export const registerUser = async ({
     district,
     state,
     pincode,
-    village
+    village,
+    latitude,
+    longitude
 }) => {
 
     const normalizedMobile = normalizeMobile(mobile);
@@ -67,13 +69,15 @@ export const registerUser = async ({
             state,
             pincode,
             village,
+            latitude,
+            longitude,
             is_active
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, FALSE)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,$11, FALSE)
         ON CONFLICT (mobile) DO NOTHING
         RETURNING
             id, mobile, email, full_name, crop_id,
-            country, district, state, pincode, village,
+            country, district, state, pincode, village,latitude,longitude,
             is_active, created_at`,
         [
             normalizedMobile,
@@ -84,7 +88,9 @@ export const registerUser = async ({
             district?.trim() || null,
             state?.trim() || null,
             pincode?.trim() || null,
-            village?.trim() || null
+            village?.trim() || null,
+            latitude ?? null,
+            longitude ?? null
         ]
     );
 

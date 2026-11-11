@@ -41,6 +41,20 @@ export const RegisterDTO = {
         village: {
             type: "string",
             example: "Madhapur"
+        },
+        latitude: {
+            type: "number",
+            nullable: true,
+            minimum: -90,
+            maximum: 90,
+            example: 17.385
+        },
+        longitude: {
+            type: "number",
+            nullable: true,
+            minimum: -180,
+            maximum: 180,
+            example: 78.4867
         }
     }
 };

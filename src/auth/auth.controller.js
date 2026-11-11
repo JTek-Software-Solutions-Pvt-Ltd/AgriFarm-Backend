@@ -15,10 +15,11 @@ export const register = async (req, res) => {
             district,
             state,
             pincode,
-            village
+            village,
+            latitude,
+            longitude
         } = req.body;
 
-        // Mobile is compulsory
         if (!mobile || !mobile.trim()) {
             return res.status(400).json({
                 success: false,
@@ -33,7 +34,6 @@ export const register = async (req, res) => {
             });
         }
 
-        // Email is optional
         if (
             email &&
             !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
@@ -41,6 +41,31 @@ export const register = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: "Enter a valid email address."
+            });
+        }
+
+        // Validate latitude and longitude
+        if (
+            latitude !== undefined &&
+            (!Number.isFinite(Number(latitude)) ||
+                Number(latitude) < -90 ||
+                Number(latitude) > 90)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid latitude. Must be between -90 and 90."
+            });
+        }
+
+        if (
+            longitude !== undefined &&
+            (!Number.isFinite(Number(longitude)) ||
+                Number(longitude) < -180 ||
+                Number(longitude) > 180)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid longitude. Must be between -180 and 180."
             });
         }
 
@@ -53,9 +78,10 @@ export const register = async (req, res) => {
             district,
             state,
             pincode,
-            village
+            village,
+            latitude,
+            longitude
         });
-
 
         if (result.alreadyRegistered) {
             return res.status(409).json({
