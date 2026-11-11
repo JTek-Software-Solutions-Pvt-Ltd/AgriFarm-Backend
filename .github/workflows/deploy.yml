@@ -61,10 +61,27 @@ jobs:
           echo "Restarting backend..."
           pm2 restart kisandost-backend --update-env
 
-          echo "Checking backend..."
-          curl -fsS http://127.0.0.1:7000/api-docs/ -o /dev/null
+          echo "Waiting for backend to become ready..."
 
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:7000/api-docs/ -o /dev/null; then
+              echo "Backend is responding successfully!"
+              break
+            fi
+          
+            if [ "$i" -eq 30 ]; then
+              echo "Backend failed to become ready."
+              pm2 logs kisandost-backend --lines 50 --nostream
+              exit 1
+            fi
+          
+            echo "Backend is starting... attempt $i/30"
+            sleep 2
+          done
+          
           echo "Deployment successful!"
-          REMOTE_SCRIPT
+          
+                    echo "Deployment successful!"
+                    REMOTE_SCRIPT
 
           ssh -i "$HOME/.ssh/deploy_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$VM_USER@$VM_HOST" 'bash -s' < /tmp/deploy_remote.sh
