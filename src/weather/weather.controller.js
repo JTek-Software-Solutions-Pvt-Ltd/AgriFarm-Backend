@@ -1,9 +1,48 @@
 import {
     getCurrentWeather,
     getWeatherForecast,
-    getHourlyWeather
+    getHourlyWeather,
+    getUserCoordinates
 } from "./weather.service.js";
 
+// Resolve coordinates from request or user table
+const resolveCoordinates = async (query) => {
+
+    const { latitude, longitude, user_id } = query;
+
+    // If either coordinate is supplied, require both
+    if (latitude !== undefined || longitude !== undefined) {
+
+        const validationError = validateCoordinates(
+            latitude,
+            longitude
+        );
+
+        if (validationError) {
+            const error = new Error(validationError);
+            error.statusCode = 400;
+            throw error;
+        }
+
+        return {
+            latitude: Number(latitude),
+            longitude: Number(longitude)
+        };
+    }
+
+    // Otherwise get coordinates using user ID
+    if (!user_id || !/^[1-9]\d*$/.test(String(user_id))) {
+        const error = new Error(
+            "Please provide valid user_id or latitude and longitude."
+        );
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return await getUserCoordinates(Number(user_id));
+};
+
+// Validate coordinates
 const validateCoordinates = (latitude, longitude) => {
 
     if (
@@ -32,30 +71,18 @@ const validateCoordinates = (latitude, longitude) => {
     return null;
 };
 
-// Current weather API
+// Current weather
 export const currentWeather = async (req, res, next) => {
     try {
-        const { latitude, longitude } = req.query;
 
-        const validationError = validateCoordinates(
-            latitude,
-            longitude
-        );
+        const coordinates = await resolveCoordinates(req.query);
 
-        if (validationError) {
-            const error = new Error(validationError);
-            error.statusCode = 400;
-            throw error;
-        }
-
-        const data = await getCurrentWeather({
-            latitude: Number(latitude),
-            longitude: Number(longitude)
-        });
+        const data = await getCurrentWeather(coordinates);
 
         return res.status(200).json({
             success: true,
             message: "Current weather fetched successfully.",
+            coordinates,
             data
         });
 
@@ -64,21 +91,11 @@ export const currentWeather = async (req, res, next) => {
     }
 };
 
-// Daily forecast API
+// Daily forecast
 export const weatherForecast = async (req, res, next) => {
     try {
-        const { latitude, longitude, days = 7 } = req.query;
 
-        const validationError = validateCoordinates(
-            latitude,
-            longitude
-        );
-
-        if (validationError) {
-            const error = new Error(validationError);
-            error.statusCode = 400;
-            throw error;
-        }
+        const { days = 7 } = req.query;
 
         const forecastDays = Number(days);
 
@@ -94,15 +111,17 @@ export const weatherForecast = async (req, res, next) => {
             throw error;
         }
 
+        const coordinates = await resolveCoordinates(req.query);
+
         const data = await getWeatherForecast({
-            latitude: Number(latitude),
-            longitude: Number(longitude),
+            ...coordinates,
             days: forecastDays
         });
 
         return res.status(200).json({
             success: true,
             message: "Weather forecast fetched successfully.",
+            coordinates,
             data
         });
 
@@ -111,30 +130,18 @@ export const weatherForecast = async (req, res, next) => {
     }
 };
 
-// Hourly forecast API
+// Hourly forecast
 export const hourlyWeather = async (req, res, next) => {
     try {
-        const { latitude, longitude } = req.query;
 
-        const validationError = validateCoordinates(
-            latitude,
-            longitude
-        );
+        const coordinates = await resolveCoordinates(req.query);
 
-        if (validationError) {
-            const error = new Error(validationError);
-            error.statusCode = 400;
-            throw error;
-        }
-
-        const data = await getHourlyWeather({
-            latitude: Number(latitude),
-            longitude: Number(longitude)
-        });
+        const data = await getHourlyWeather(coordinates);
 
         return res.status(200).json({
             success: true,
             message: "Hourly weather fetched successfully.",
+            coordinates,
             data
         });
 

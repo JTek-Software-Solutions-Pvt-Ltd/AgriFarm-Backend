@@ -1,4 +1,4 @@
-const WEATHER_API_URL = "https://api.open-meteo.com/v1/forecast";
+import pool from "../config/db.js";
 
 const CURRENT_FIELDS = [
     "temperature_2m",
@@ -40,7 +40,7 @@ const fetchWeather = async (params) => {
     const query = new URLSearchParams(params);
 
     const response = await fetch(
-        `${WEATHER_API_URL}?${query.toString()}`,
+        `${process.env.WEATHER_API_URL}?${query.toString()}`,
         { signal: AbortSignal.timeout(15000) }
     );
 
@@ -94,4 +94,35 @@ export const getHourlyWeather = async ({
         forecast_hours: "24",
         timezone: "auto"
     });
+};
+
+export const getUserCoordinates = async (userId) => {
+
+    const result = await pool.query(
+        `SELECT id, latitude, longitude
+         FROM users
+         WHERE id = $1`,
+        [userId]
+    );
+
+    if (result.rows.length === 0) {
+        const error = new Error("User not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const user = result.rows[0];
+
+    if (user.latitude === null || user.longitude === null) {
+        const error = new Error(
+            "User location not available. Please update your location."
+        );
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return {
+        latitude: Number(user.latitude),
+        longitude: Number(user.longitude)
+    };
 };
