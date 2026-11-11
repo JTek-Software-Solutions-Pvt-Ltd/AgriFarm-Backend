@@ -91,7 +91,7 @@ export const currentWeather = async (req, res, next) => {
     }
 };
 
-// Daily forecast
+// Daily forecast Fetching
 export const weatherForecast = async (req, res, next) => {
     try {
 
