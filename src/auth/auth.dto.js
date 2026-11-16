@@ -138,6 +138,52 @@ export const UserProfileResponse = {
         }
     }
 };
+
+export const UpdateProfileDTO = {
+    type: "object",
+    properties: {
+        full_name: {
+            type: "string",
+            example: "Ramesh Kumar"
+        },
+        photo_url: {
+            type: "string",
+            nullable: true,
+            example: "https://example.com/profile.jpg"
+        },
+        email: {
+            type: "string",
+            format: "email",
+            example: "ramesh@gmail.com"
+        },
+        mobile: {
+            type: "string",
+            example: "+919876543210"
+        },
+        crop_id: {
+            type: "integer",
+            example: 1
+        },
+        country: {
+            type: "string",
+            example: "India"
+        },
+        state: {
+            type: "string",
+            example: "Odisha"
+        },
+        district: {
+            type: "string",
+            example: "Cuttack"
+        },
+        pincode: {
+            type: "string",
+            example: "500081"
+        }
+    },
+    minProperties: 1
+};
+
 export const SendOTPDTO = {
     type: "object",
     required: ["mobile"],
@@ -184,7 +230,8 @@ export const authSchemas = {
     SendOTPDTO,
     VerifyOTPDTO,
     AuthResponseDTO,
-    UserProfileResponse
+    UserProfileResponse,
+    UpdateProfileDTO
 };
 
 // API DOCUMENTATION
@@ -309,6 +356,48 @@ export const authPaths = {
                 400: { description: "Invalid user ID" },
                 404: { description: "User not found" },
                 500: { description: "Internal server error" }
+            }
+        }
+    },
+     "/api/auth/updateProfile/{user_id}": {
+        put: {
+            tags: ["Authentication"],
+            summary: "Update User Profile",
+            description: "Update user profile details using user ID.",
+            parameters: [
+                {
+                    name: "user_id",
+                    in: "path",
+                    required: true,
+                    schema: {
+                        type: "integer",
+                        example: 8
+                    }
+                }
+            ],
+            requestBody: {
+                required: true,
+                content: {
+                    "application/json": {
+                        schema: {
+                            $ref: "#/components/schemas/UpdateProfileDTO"
+                        }
+                    }
+                }
+            },
+            responses: {
+                200: {
+                    description: "User profile updated successfully"
+                },
+                400: {
+                    description: "Invalid request"
+                },
+                404: {
+                    description: "User not found"
+                },
+                500: {
+                    description: "Internal server error"
+                }
             }
         }
     }

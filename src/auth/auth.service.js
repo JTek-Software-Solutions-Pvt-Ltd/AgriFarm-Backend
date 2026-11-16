@@ -442,3 +442,64 @@ export const getUserProfile = async (userId) => {
 
     return result.rows[0];
 };
+
+export const updateUserProfile = async (userId, profileData) => {
+
+    const allowedFields = {
+        full_name: "full_name",
+        photo_url: "photo_url",
+        email: "email",
+        mobile: "mobile",
+        crop_id: "crop_id",
+        country: "country",
+        state_id: "state_id",
+        district_id: "district_id",
+        pincode: "pincode"
+    };
+
+    const updates = [];
+    const values = [];
+
+    for (const [field, column] of Object.entries(allowedFields)) {
+        if (profileData[field] !== undefined) {
+            values.push(profileData[field]);
+            updates.push(`${column} = $${values.length}`);
+        }
+    }
+
+    if (updates.length === 0) {
+        const error = new Error("At least one profile field is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    values.push(userId);
+
+    const query = `
+        UPDATE users
+        SET ${updates.join(", ")},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $${values.length}
+        RETURNING
+            id AS user_id,
+            full_name,
+            photo_url,
+            email,
+            mobile AS phone,
+            crop_id,
+            country,
+            state_id,
+            district_id,
+            pincode
+    `;
+
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+        const error = new Error("User not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    return result.rows[0];
+};
