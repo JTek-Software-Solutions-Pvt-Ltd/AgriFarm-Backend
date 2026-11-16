@@ -58,7 +58,86 @@ export const RegisterDTO = {
         }
     }
 };
-
+export const UserProfileResponse = {
+    type: "object",
+    properties: {
+        success: {
+            type: "boolean",
+            example: true
+        },
+        message: {
+            type: "string",
+            example: "User profile fetched successfully."
+        },
+        data: {
+            type: "object",
+            properties: {
+                user_id: {
+                    type: "integer",
+                    example: 8
+                },
+                full_name: {
+                    type: "string",
+                    example: "Ramesh Kumar",
+                    nullable: true
+                },
+                photo_url: {
+                    type: "string",
+                    example: "https://example.com/profile/user8.jpg",
+                    nullable: true
+                },
+                email: {
+                    type: "string",
+                    example: "ramesh@gmail.com",
+                    nullable: true
+                },
+                phone: {
+                    type: "string",
+                    example: "+919876543210"
+                },
+                crop_id: {
+                    type: "integer",
+                    example: 1,
+                    nullable: true
+                },
+                primary_crop: {
+                    type: "string",
+                    example: "Rice",
+                    nullable: true
+                },
+                country: {
+                    type: "string",
+                    example: "India"
+                },
+                state_id: {
+                    type: "integer",
+                    example: 36,
+                    nullable: true
+                },
+                state: {
+                    type: "string",
+                    example: "Telangana",
+                    nullable: true
+                },
+                district_id: {
+                    type: "integer",
+                    example: 520,
+                    nullable: true
+                },
+                district: {
+                    type: "string",
+                    example: "Hyderabad",
+                    nullable: true
+                },
+                pincode: {
+                    type: "string",
+                    example: "500081",
+                    nullable: true
+                }
+            }
+        }
+    }
+};
 export const SendOTPDTO = {
     type: "object",
     required: ["mobile"],
@@ -104,7 +183,8 @@ export const authSchemas = {
     RegisterDTO,
     SendOTPDTO,
     VerifyOTPDTO,
-    AuthResponseDTO
+    AuthResponseDTO,
+    UserProfileResponse
 };
 
 // API DOCUMENTATION
@@ -195,6 +275,40 @@ export const authPaths = {
                         }
                     }
                 }
+            }
+        }
+    },
+
+     "/api/auth/profile/{user_id}": {
+        get: {
+            tags: ["Authentication"],
+            summary: "Get User Profile",
+            description: "Fetch user profile details using user ID.",
+            parameters: [
+                {
+                    name: "user_id",
+                    in: "path",
+                    required: true,
+                    schema: {
+                        type: "integer",
+                        example: 8
+                    }
+                }
+            ],
+            responses: {
+                200: {
+                    description: "User profile fetched successfully",
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/UserProfileResponse"
+                            }
+                        }
+                    }
+                },
+                400: { description: "Invalid user ID" },
+                404: { description: "User not found" },
+                500: { description: "Internal server error" }
             }
         }
     }

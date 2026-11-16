@@ -410,3 +410,35 @@ export const verifyLoginOTP = async ({ mobile, otp }) => {
         client.release();
     }
 };
+
+export const getUserProfile = async (userId) => {
+    const query = `
+        SELECT
+            u.id AS user_id,
+            u.full_name,
+            u.photo_url,
+            u.email,
+            u.mobile AS phone,
+            u.crop_id,
+            c.name AS primary_crop,
+            u.country,
+            u.state,
+            u.district,
+            u.pincode
+        FROM users u
+        LEFT JOIN crop c
+            ON c.id = u.crop_id
+        WHERE u.id = $1
+        LIMIT 1
+    `;
+
+    const result = await pool.query(query, [userId]);
+
+    if (result.rows.length === 0) {
+        const error = new Error("User not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    return result.rows[0];
+};

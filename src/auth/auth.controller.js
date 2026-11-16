@@ -1,7 +1,8 @@
 import {
     registerUser,
     sendLoginOTP,
-    verifyLoginOTP
+    verifyLoginOTP,
+    getUserProfile 
 } from "./auth.service.js";
 
 export const register = async (req, res) => {
@@ -187,5 +188,29 @@ export const verifyOTP = async (req, res) => {
             success: false,
             message: error.message || "OTP verification failed."
         });
+    }
+};
+
+export const userProfile = async (req, res, next) => {
+    try {
+        const { user_id } = req.params;
+
+        if (!/^[1-9]\d*$/.test(user_id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid user ID is required."
+            });
+        }
+
+        const profile = await getUserProfile(Number(user_id));
+
+        return res.status(200).json({
+            success: true,
+            message: "User profile fetched successfully.",
+            data: profile
+        });
+
+    } catch (error) {
+        next(error);
     }
 };

@@ -3,7 +3,7 @@ import express from "express";
 import {
     register,
     requestOTP,
-    verifyOTP
+    verifyOTP,userProfile
 } from "./auth.controller.js";
 
 const router = express.Router();
@@ -21,5 +21,6 @@ router.get("/", (req, res) => {
 router.post("/register", register);
 router.post("/send-otp", requestOTP);
 router.post("/verify-otp", verifyOTP);
+router.get("/profile/:user_id", userProfile);
 
 export default router;
