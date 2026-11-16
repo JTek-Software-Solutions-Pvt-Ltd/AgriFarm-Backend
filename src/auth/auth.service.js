@@ -424,7 +424,9 @@ export const getUserProfile = async (userId) => {
             u.country,
             u.state,
             u.district,
-            u.pincode
+            u.pincode,
+            u.longitude,
+            u.latitude
         FROM users u
         LEFT JOIN crop c
             ON c.id = u.crop_id
@@ -452,9 +454,11 @@ export const updateUserProfile = async (userId, profileData) => {
         mobile: "mobile",
         crop_id: "crop_id",
         country: "country",
-        state_id: "state_id",
-        district_id: "district_id",
-        pincode: "pincode"
+        state: "state",
+        district: "district",
+        pincode: "pincode",
+        latitude:"latitude",
+        longitude:"longitude"
     };
 
     const updates = [];
@@ -488,9 +492,11 @@ export const updateUserProfile = async (userId, profileData) => {
             mobile AS phone,
             crop_id,
             country,
-            state_id,
-            district_id,
-            pincode
+            state,
+            district,
+            pincode,
+            latitude,
+            longitude
     `;
 
     const result = await pool.query(query, values);

@@ -109,21 +109,12 @@ export const UserProfileResponse = {
                     type: "string",
                     example: "India"
                 },
-                state_id: {
-                    type: "integer",
-                    example: 36,
-                    nullable: true
-                },
                 state: {
                     type: "string",
                     example: "Telangana",
                     nullable: true
                 },
-                district_id: {
-                    type: "integer",
-                    example: 520,
-                    nullable: true
-                },
+                
                 district: {
                     type: "string",
                     example: "Hyderabad",
@@ -133,6 +124,20 @@ export const UserProfileResponse = {
                     type: "string",
                     example: "500081",
                     nullable: true
+                },
+                latitude: {
+                    type: "number",
+                    nullable: true,
+                    minimum: -90,
+                    maximum: 90,
+                    example: 17.385
+                },
+                longitude: {
+                    type: "number",
+                    nullable: true,
+                    minimum: -180,
+                    maximum: 180,
+                    example: 78.4867
                 }
             }
         }
@@ -179,6 +184,20 @@ export const UpdateProfileDTO = {
         pincode: {
             type: "string",
             example: "500081"
+        },
+        latitude: {
+            type: "number",
+            nullable: true,
+            minimum: -90,
+            maximum: 90,
+            example: 17.385
+        },
+        longitude: {
+            type: "number",
+            nullable: true,
+            minimum: -180,
+            maximum: 180,
+            example: 78.4867
         }
     },
     minProperties: 1
