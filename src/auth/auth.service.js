@@ -424,6 +424,7 @@ export const getUserProfile = async (userId) => {
             u.country,
             u.state,
             u.district,
+            u.village,
             u.pincode,
             u.longitude,
             u.latitude
@@ -456,6 +457,7 @@ export const updateUserProfile = async (userId, profileData) => {
         country: "country",
         state: "state",
         district: "district",
+        village:"village",
         pincode: "pincode",
         latitude:"latitude",
         longitude:"longitude"
@@ -494,6 +496,7 @@ export const updateUserProfile = async (userId, profileData) => {
             country,
             state,
             district,
+            village,
             pincode,
             latitude,
             longitude
