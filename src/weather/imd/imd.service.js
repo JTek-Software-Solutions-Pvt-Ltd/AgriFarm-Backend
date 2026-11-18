@@ -1,5 +1,16 @@
 import pool from "../../config/db.js";
 
+const normalizeName = (value) =>
+    String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
+const normalizeState = (value) => {
+    const name = normalizeName(value);
+    return name === "orissa" ? "odisha" : name;
+};
+
 const IMD_BASE_URL =
     process.env.IMD_BASE_URL || "https://api.imd.gov.in/api/v1";
 
@@ -262,18 +273,6 @@ export const getImdDistrictMapping = async () => {
     return await fetchImdData("state_district_rainfall_forecast");
 };
 
-// Normalize district/state names
-const normalizeName = (value) =>
-    String(value || "")
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, " ");
-
-const normalizeState = (value) => {
-    const state = normalizeName(value);
-    return state === "orissa" ? "odisha" : state;
-};
-
 // 8. Get user's district and state from database
 export const getUserLocation = async (userId) => {
     const result = await pool.query(
@@ -350,4 +349,105 @@ export const saveUserImdMapping = async ({
     );
 
     return result.rows[0] || null;
+};
+
+
+
+// Reverse geocode coordinates
+export const getLocationFromCoordinates = async (latitude, longitude) => {
+    const url = new URL("https://nominatim.openstreetmap.org/reverse");
+
+    url.searchParams.set("lat", latitude);
+    url.searchParams.set("lon", longitude);
+    url.searchParams.set("format", "jsonv2");
+    url.searchParams.set("addressdetails", "1");
+
+    const response = await fetch(url, {
+        headers: {
+            "User-Agent": "AgriFarm-Backend/1.0 (location lookup)"
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error("Unable to identify location from coordinates.");
+    }
+
+    const data = await response.json();
+    const address = data.address || {};
+
+    return {
+        stateName: address.state || null,
+        districtName:
+            address.state_district ||
+            address.district ||
+            address.county ||
+            null,
+        address
+    };
+};
+
+// Match location against your local database and update user
+export const updateUserLocationFromCoordinates = async ({
+    userId,
+    latitude,
+    longitude
+}) => {
+    const location = await getLocationFromCoordinates(
+        latitude,
+        longitude
+    );
+
+    if (!location.stateName || !location.districtName) {
+        throw new Error("State or district could not be identified.");
+    }
+
+    const stateResult = await pool.query(
+        `SELECT id, name
+         FROM state
+         WHERE LOWER(TRIM(name)) = $1
+         LIMIT 1`,
+        [normalizeState(location.stateName)]
+    );
+
+    if (!stateResult.rows.length) {
+        throw new Error(`State not found: ${location.stateName}`);
+    }
+
+    const state = stateResult.rows[0];
+
+    const districtResult = await pool.query(
+        `SELECT id, name
+         FROM districts
+         WHERE state_id = $1
+           AND LOWER(TRIM(name)) = $2
+         LIMIT 1`,
+        [state.id, normalizeName(location.districtName)]
+    );
+
+    if (!districtResult.rows.length) {
+        throw new Error(`District not found: ${location.districtName}`);
+    }
+
+    const district = districtResult.rows[0];
+
+    const updateResult = await pool.query(
+        `UPDATE users
+         SET state_id = $1,
+             district_id = $2,
+             latitude = $3,
+             longitude = $4
+         WHERE id = $5
+         RETURNING id, state_id, district_id, latitude, longitude`,
+        [state.id, district.id, latitude, longitude, userId]
+    );
+
+    if (!updateResult.rows.length) {
+        throw new Error("User not found.");
+    }
+
+    return {
+        ...updateResult.rows[0],
+        state_name: state.name,
+        district_name: district.name
+    };
 };

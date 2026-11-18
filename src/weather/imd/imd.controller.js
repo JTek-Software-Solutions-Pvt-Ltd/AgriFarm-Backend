@@ -9,7 +9,8 @@ import {
     getImdCityForecastMapping,
     getUserLocation,
     findImdDistrictId,
-    saveUserImdMapping
+    saveUserImdMapping,
+    updateUserLocationFromCoordinates
 } from "./imd.service.js";
 
 const sendResponse = async (res, message, serviceCall) => {
@@ -197,7 +198,11 @@ export const imdStationMapping = async (req, res) => {
         }
 
         // 1. Get user's local district and state
-        const user = await getUserLocation(userId);
+        const user = await updateUserLocationFromCoordinates({
+                userId,
+                latitude: lat,
+                longitude: lon
+            });
 
         if (!user) {
             return res.status(404).json({
