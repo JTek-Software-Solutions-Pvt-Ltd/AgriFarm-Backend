@@ -6,7 +6,10 @@ import {
     getImdNowcast,
     getImdRainfall,
     getImdAwsData,
-    getImdCityForecastMapping
+    getImdCityForecastMapping,
+    getUserLocation,
+    findImdDistrictId,
+    saveUserImdMapping
 } from "./imd.service.js";
 
 const sendResponse = async (res, message, serviceCall) => {
@@ -155,6 +158,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
     return R * c;
 };
 
+
 export const imdStationMapping = async (req, res) => {
     try {
         const { latitude, longitude } = req.query;
@@ -182,7 +186,34 @@ export const imdStationMapping = async (req, res) => {
             });
         }
 
-        // Fetch IMD station mapping
+        // Get authenticated user ID
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required."
+            });
+        }
+
+        // 1. Get user's local district and state
+        const user = await getUserLocation(userId);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        if (!user.district_name || !user.state_name) {
+            return res.status(400).json({
+                success: false,
+                message: "User district and state are required."
+            });
+        }
+
+        // 2. Fetch IMD station mapping
         const mapping = await getImdCityForecastMapping();
 
         const stations = Array.isArray(mapping)
@@ -191,18 +222,18 @@ export const imdStationMapping = async (req, res) => {
                 ? mapping.data
                 : Array.isArray(mapping?.Data)
                     ? mapping.Data
-                    : null;
+                    : [];
 
-        if (!stations) {
+        if (!stations.length) {
             return res.status(502).json({
                 success: false,
-                message: "Unexpected response received from IMD station mapping."
+                message: "No IMD station mapping records found."
             });
         }
 
-        // Calculate distance from farmer location to each IMD station
+        // 3. Find nearest IMD station
         const stationsWithDistance = stations
-            .map(station => {
+            .map((station) => {
                 const stationLat = Number(station.Latitude);
                 const stationLon = Number(station.Longitude);
 
@@ -223,49 +254,83 @@ export const imdStationMapping = async (req, res) => {
                 );
 
                 return {
-                    station_id: station.Station_Code,
-                    Station_Code: station.Station_Code,
-                    Station_Name: station.Station_Name,
+                    station_id: String(station.Station_Code),
+                    station_name: station.Station_Name,
                     state: station.states,
                     latitude: station.Latitude,
                     longitude: station.Longitude,
                     distance_km: Number(distance.toFixed(2))
                 };
             })
-            .filter(Boolean);
+            .filter(Boolean)
+            .sort((a, b) => a.distance_km - b.distance_km);
 
-        if (stationsWithDistance.length === 0) {
+        if (!stationsWithDistance.length) {
             return res.status(404).json({
                 success: false,
                 message: "No valid IMD stations found."
             });
         }
 
-        // Sort nearest station first
-        stationsWithDistance.sort(
-            (a, b) => a.distance_km - b.distance_km
-        );
-
-        // Return nearest station
         const nearestStation = stationsWithDistance[0];
 
+        // 4. Find IMD district ID
+        const imdDistrictId = await findImdDistrictId(
+            user.district_name,
+            user.state_name
+        );
+
+        if (!imdDistrictId) {
+            return res.status(404).json({
+                success: false,
+                message: "IMD district mapping not found.",
+                district: user.district_name,
+                state: user.state_name
+            });
+        }
+
+        // 5. Save station_id and imd_district_id in users table
+        const saved = await saveUserImdMapping({
+            userId,
+            stationId: nearestStation.station_id,
+            imdDistrictId
+        });
+
+        if (!saved) {
+            return res.status(404).json({
+                success: false,
+                message: "Unable to update user IMD mapping."
+            });
+        }
+
+        // 6. Return response
         return res.status(200).json({
             success: true,
-            message: "Nearest IMD station fetched successfully.",
+            message: "IMD station and district mapping saved successfully.",
             provider: "IMD",
-            farmer_location: {
+            data: {
+                user_id: saved.id,
+                station_id: saved.station_id,
+                station_name: nearestStation.station_name,
+                district_id: user.district_id,
+                district_name: user.district_name,
+                imd_district_id: saved.imd_district_id,
+                state_id: user.state_id,
+                state_name: user.state_name,
                 latitude: lat,
-                longitude: lon
-            },
-            data: nearestStation
+                longitude: lon,
+                distance_km: nearestStation.distance_km
+            }
         });
 
     } catch (error) {
-        console.error("IMD Station Mapping Error:", error.message);
+        console.error("IMD Station Mapping Error:", error);
 
         return res.status(error.statusCode || 502).json({
             success: false,
-            message: error.message || "Unable to fetch IMD station mapping."
+            message: error.message ||
+                "Unable to fetch IMD station mapping."
         });
     }
 };
+

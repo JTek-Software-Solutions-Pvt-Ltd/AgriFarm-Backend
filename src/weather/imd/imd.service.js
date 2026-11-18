@@ -1,3 +1,4 @@
+import pool from "../../config/db.js";
 
 const IMD_BASE_URL =
     process.env.IMD_BASE_URL || "https://api.imd.gov.in/api/v1";
@@ -257,3 +258,96 @@ export const getImdCityForecastMapping = async () => {
     return await fetchImdData("cityforecast_mapping");
 };
 
+export const getImdDistrictMapping = async () => {
+    return await fetchImdData("state_district_rainfall_forecast");
+};
+
+// Normalize district/state names
+const normalizeName = (value) =>
+    String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
+const normalizeState = (value) => {
+    const state = normalizeName(value);
+    return state === "orissa" ? "odisha" : state;
+};
+
+// 8. Get user's district and state from database
+export const getUserLocation = async (userId) => {
+    const result = await pool.query(
+        `SELECT
+            u.id AS user_id,
+            u.state_id,
+            u.district_id,
+            d.name AS district_name,
+            s.name AS state_name
+         FROM users u
+         LEFT JOIN districts d
+            ON d.id = u.district_id
+         LEFT JOIN state s
+            ON s.id = u.state_id
+         WHERE u.id = $1
+         LIMIT 1`,
+        [userId]
+    );
+
+    return result.rows[0] || null;
+};
+
+// 9. Find IMD district ID using local district and state
+export const findImdDistrictId = async (
+    districtName,
+    stateName
+) => {
+    const response = await getImdDistrictMapping();
+
+    const records = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+            ? response.data
+            : Array.isArray(response?.Data)
+                ? response.Data
+                : [];
+
+    const matchedDistrict = records.find((item) =>
+        normalizeName(item.District) === normalizeName(districtName) &&
+        normalizeState(item.State) === normalizeState(stateName)
+    );
+
+    const imdDistrictId =
+        matchedDistrict?.Obj_id ??
+        matchedDistrict?.OBJ_ID ??
+        null;
+
+    return imdDistrictId !== null
+        ? String(imdDistrictId)
+        : null;
+};
+
+// 10. Save IMD station and district IDs in users table
+export const saveUserImdMapping = async ({
+    userId,
+    stationId,
+    imdDistrictId
+}) => {
+    const result = await pool.query(
+        `UPDATE users
+         SET
+            station_id = $1,
+            imd_district_id = $2
+         WHERE id = $3
+         RETURNING
+            id,
+            station_id,
+            imd_district_id`,
+        [
+            stationId,
+            imdDistrictId,
+            userId
+        ]
+    );
+
+    return result.rows[0] || null;
+};
