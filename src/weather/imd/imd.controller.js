@@ -138,14 +138,13 @@ export const imdAwsData = (req, res) => {
 };
 
 
+
 export const imdStationMapping = async (req, res) => {
     try {
-        const { search } = req.query;
+        const { search, state } = req.query;
 
         const mapping = await getImdCityForecastMapping();
 
-        // IMD mapping is expected to return an array.
-        // Also support common wrapped response formats.
         const stations = Array.isArray(mapping)
             ? mapping
             : Array.isArray(mapping?.data)
@@ -163,17 +162,35 @@ export const imdStationMapping = async (req, res) => {
 
         let result = stations;
 
-        if (search && search.trim()) {
+        // Optional state filter
+        if (state?.trim()) {
+            result = result.filter(station =>
+                String(station.states || "")
+                    .toLowerCase() === state.trim().toLowerCase()
+            );
+        }
+
+        // Search station name or code
+        if (search?.trim()) {
             const keyword = search.trim().toLowerCase();
 
-            result = stations.filter((station) =>
+            // First try exact station name
+            const exactMatches = result.filter(station =>
                 String(station.Station_Name || "")
-                    .toLowerCase()
-                    .includes(keyword) ||
-                String(station.Station_Code || "")
-                    .toLowerCase()
-                    .includes(keyword)
+                    .trim()
+                    .toLowerCase() === keyword
             );
+
+            // If exact match exists, return only exact matches.
+            // Otherwise, return partial matches.
+            result = exactMatches.length > 0
+                ? exactMatches
+                : result.filter(station =>
+                    String(station.Station_Name || "")
+                        .toLowerCase().includes(keyword) ||
+                    String(station.Station_Code || "")
+                        .toLowerCase().includes(keyword)
+                );
         }
 
         return res.status(200).json({
@@ -193,3 +210,4 @@ export const imdStationMapping = async (req, res) => {
         });
     }
 };
+
