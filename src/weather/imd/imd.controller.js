@@ -140,7 +140,6 @@ export const imdAwsData = (req, res) => {
 // Calculate distance between two coordinates (Haversine formula)
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const toRadians = (degree) => degree * (Math.PI / 180);
-
     const R = 6371; // Earth's radius in KM
     const dLat = toRadians(lat2 - lat1);
     const dLon = toRadians(lon2 - lon1);
