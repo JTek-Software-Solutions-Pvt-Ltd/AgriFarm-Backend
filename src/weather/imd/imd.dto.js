@@ -160,6 +160,11 @@ export const imdPaths = {
             tags: ["IMD Weather"],
             summary: "Get nearest IMD weather station",
             description: "Find the nearest IMD city forecast station using farmer latitude and longitude.",
+            security: [
+                {
+                    bearerAuth: []
+                }
+            ],
             parameters: [
                 {
                     name: "latitude",
