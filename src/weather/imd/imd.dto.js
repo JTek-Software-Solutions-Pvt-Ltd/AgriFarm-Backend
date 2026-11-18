@@ -154,23 +154,51 @@ export const imdPaths = {
     },
 
     // 7. Station Mapping
+    
     "/api/weather/imd/stations": {
         get: {
             tags: ["IMD Weather"],
-            summary: "Get IMD city forecast station mapping",
-            description: "Fetch IMD city forecast stations with optional search.",
+            summary: "Get nearest IMD weather station",
+            description: "Find the nearest IMD city forecast station using farmer latitude and longitude.",
             parameters: [
                 {
-                    name: "search",
+                    name: "latitude",
                     in: "query",
-                    required: false,
+                    required: true,
                     schema: {
-                        type: "string",
-                        example: "Rourkela"
+                        type: "number",
+                        minimum: -90,
+                        maximum: 90,
+                        example: 19.8135
+                    }
+                },
+                {
+                    name: "longitude",
+                    in: "query",
+                    required: true,
+                    schema: {
+                        type: "number",
+                        minimum: -180,
+                        maximum: 180,
+                        example: 85.8312
                     }
                 }
             ],
-            responses: imdResponses
+            responses: {
+                200: {
+                    description: "Nearest IMD station fetched successfully."
+                },
+                400: {
+                    description: "Invalid or missing coordinates."
+                },
+                404: {
+                    description: "No valid IMD stations found."
+                },
+                502: {
+                    description: "Unable to fetch IMD station mapping."
+                }
+            }
         }
     }
+
 };

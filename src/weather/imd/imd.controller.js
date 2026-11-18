@@ -137,12 +137,55 @@ export const imdAwsData = (req, res) => {
     );
 };
 
+// Calculate distance between two coordinates (Haversine formula)
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const toRadians = (degree) => degree * (Math.PI / 180);
 
+    const R = 6371; // Earth's radius in KM
+
+    const dLat = toRadians(lat2 - lat1);
+    const dLon = toRadians(lon2 - lon1);
+
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRadians(lat1)) *
+        Math.cos(toRadians(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+};
 
 export const imdStationMapping = async (req, res) => {
     try {
-        const { search, state } = req.query;
+        const { latitude, longitude } = req.query;
 
+        // Validate coordinates
+        if (latitude === undefined || longitude === undefined) {
+            return res.status(400).json({
+                success: false,
+                message: "Latitude and longitude are required."
+            });
+        }
+
+        const lat = Number(latitude);
+        const lon = Number(longitude);
+
+        if (
+            !Number.isFinite(lat) ||
+            !Number.isFinite(lon) ||
+            lat < -90 || lat > 90 ||
+            lon < -180 || lon > 180
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid latitude or longitude."
+            });
+        }
+
+        // Fetch IMD station mapping
         const mapping = await getImdCityForecastMapping();
 
         const stations = Array.isArray(mapping)
@@ -160,45 +203,64 @@ export const imdStationMapping = async (req, res) => {
             });
         }
 
-        let result = stations;
+        // Calculate distance from farmer location to each IMD station
+        const stationsWithDistance = stations
+            .map(station => {
+                const stationLat = Number(station.Latitude);
+                const stationLon = Number(station.Longitude);
 
-        // Optional state filter
-        if (state?.trim()) {
-            result = result.filter(station =>
-                String(station.states || "")
-                    .toLowerCase() === state.trim().toLowerCase()
-            );
-        }
+                if (
+                    !Number.isFinite(stationLat) ||
+                    !Number.isFinite(stationLon) ||
+                    stationLat < -90 || stationLat > 90 ||
+                    stationLon < -180 || stationLon > 180
+                ) {
+                    return null;
+                }
 
-        // Search station name or code
-        if (search?.trim()) {
-            const keyword = search.trim().toLowerCase();
-
-            // First try exact station name
-            const exactMatches = result.filter(station =>
-                String(station.Station_Name || "")
-                    .trim()
-                    .toLowerCase() === keyword
-            );
-
-            // If exact match exists, return only exact matches.
-            // Otherwise, return partial matches.
-            result = exactMatches.length > 0
-                ? exactMatches
-                : result.filter(station =>
-                    String(station.Station_Name || "")
-                        .toLowerCase().includes(keyword) ||
-                    String(station.Station_Code || "")
-                        .toLowerCase().includes(keyword)
+                const distance = calculateDistance(
+                    lat,
+                    lon,
+                    stationLat,
+                    stationLon
                 );
+
+                return {
+                    station_id: station.Station_Code,
+                    Station_Code: station.Station_Code,
+                    Station_Name: station.Station_Name,
+                    state: station.states,
+                    latitude: station.Latitude,
+                    longitude: station.Longitude,
+                    distance_km: Number(distance.toFixed(2))
+                };
+            })
+            .filter(Boolean);
+
+        if (stationsWithDistance.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No valid IMD stations found."
+            });
         }
+
+        // Sort nearest station first
+        stationsWithDistance.sort(
+            (a, b) => a.distance_km - b.distance_km
+        );
+
+        // Return nearest station
+        const nearestStation = stationsWithDistance[0];
 
         return res.status(200).json({
             success: true,
-            message: "IMD station mapping fetched successfully.",
+            message: "Nearest IMD station fetched successfully.",
             provider: "IMD",
-            total: result.length,
-            data: result
+            farmer_location: {
+                latitude: lat,
+                longitude: lon
+            },
+            data: nearestStation
         });
 
     } catch (error) {
@@ -210,4 +272,3 @@ export const imdStationMapping = async (req, res) => {
         });
     }
 };
-
