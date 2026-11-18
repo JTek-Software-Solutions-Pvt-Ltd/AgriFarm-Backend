@@ -1,6 +1,6 @@
 
 import express from "express";
-
+import { authenticateToken } from "../../middleware/auth.middleware.js";
 import {
     imdCurrentWeather,
     imdForecast,
@@ -19,6 +19,6 @@ router.get("/warnings", imdWarnings);
 router.get("/nowcast", imdNowcast);
 router.get("/rainfall", imdRainfall);
 router.get("/aws", imdAwsData);
-router.get("/stations", imdStationMapping);
+router.get("/stations", authenticateToken, imdStationMapping);
 
 export default router;
