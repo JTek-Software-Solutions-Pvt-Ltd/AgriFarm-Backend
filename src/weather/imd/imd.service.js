@@ -1,80 +1,228 @@
+
 const IMD_BASE_URL =
     process.env.IMD_BASE_URL || "https://api.imd.gov.in/api/v1";
 
-const getImdHeaders = () => {
-    const apiKey = process.env.IMD_API_KEY;
-    const jwtToken = process.env.IMD_JWT_TOKEN;
+const IMD_TOKEN_URL =
+    "https://api.imd.gov.in/api/oauth/token.php";
 
-    if (!apiKey || !jwtToken) {
-        const error = new Error(
-            "IMD API key or JWT token is missing."
-        );
-        error.statusCode = 500;
-        throw error;
+// In-memory token cache
+let accessToken = null;
+let tokenType = "Bearer";
+let tokenExpiresAt = 0;
+let tokenRequestPromise = null;
+
+// Generate or reuse IMD JWT token
+const getImdAccessToken = async (forceRefresh = false) => {
+
+    // Reuse existing valid token
+    if (
+        !forceRefresh &&
+        accessToken &&
+        Date.now() < tokenExpiresAt
+    ) {
+        return accessToken;
     }
-    console.log('IMD_API_KEY:', !!process.env.IMD_API_KEY);
-    console.log('IMD_JWT_TOKEN:', !!process.env.IMD_JWT_TOKEN);
-    console.log('IMD_BASE_URL:', process.env.IMD_BASE_URL);
+
+    // Prevent multiple simultaneous token requests
+    if (tokenRequestPromise) {
+        return tokenRequestPromise;
+    }
+
+    tokenRequestPromise = (async () => {
+        try {
+            const email = process.env.IMD_EMAIL;
+            const password = process.env.IMD_PASSWORD;
+
+            if (!email || !password) {
+                throw new Error(
+                    "IMD email or password is missing."
+                );
+            }
+
+            const response = await fetch(IMD_TOKEN_URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                body: JSON.stringify({
+                    email,
+                    password
+                }),
+                signal: AbortSignal.timeout(15000)
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.access_token) {
+                console.error("IMD Token Generation Failed:", {
+                    status: response.status,
+                    message: data.message || data.error
+                });
+
+                throw new Error(
+                    "Unable to generate IMD access token."
+                );
+            }
+
+            accessToken = data.access_token;
+            tokenType = data.token_type || "Bearer";
+
+            const expiresIn = Number(data.expires_in);
+
+            if (!Number.isFinite(expiresIn) || expiresIn <= 0) {
+                accessToken = null;
+                throw new Error(
+                    "Invalid IMD token expiry received."
+                );
+            }
+
+            // Refresh 5 minutes before actual expiry
+            const refreshAfter = Math.max(
+                30,
+                expiresIn - 300
+            );
+
+            tokenExpiresAt =
+                Date.now() + refreshAfter * 1000;
+
+            console.log(
+                `IMD access token generated. Next refresh in ${Math.round(refreshAfter / 60)} minutes.`
+            );
+
+            return accessToken;
+
+        } catch (error) {
+            accessToken = null;
+            tokenExpiresAt = 0;
+
+            console.error(
+                "IMD Token Error:",
+                error.message
+            );
+
+            throw error;
+
+        } finally {
+            tokenRequestPromise = null;
+        }
+    })();
+
+    return tokenRequestPromise;
+};
+
+
+// Generate headers for IMD weather APIs
+const getImdHeaders = async (forceRefresh = false) => {
+
+    const apiKey = process.env.IMD_API_KEY;
+
+    if (!apiKey) {
+        throw new Error("IMD API key is missing.");
+    }
+
+    const token = await getImdAccessToken(forceRefresh);
+
     return {
         "X-API-KEY": apiKey,
-        "Authorization": `Bearer ${jwtToken}`,
+        "Authorization": `${tokenType} ${token}`,
         "Accept": "application/json"
     };
 };
 
+
+// Fetch IMD API data with automatic token refresh
 export const fetchImdData = async (endpoint, params = {}) => {
+
     const url = new URL(`${IMD_BASE_URL}/${endpoint}`);
 
     Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
+        if (
+            value !== undefined &&
+            value !== null &&
+            value !== ""
+        ) {
             url.searchParams.set(key, String(value));
         }
     });
 
-    try {
-        const response = await fetch(url, {
-            method: "GET",
-            headers: getImdHeaders(),
-            signal: AbortSignal.timeout(15000)
-        });
+    for (let attempt = 0; attempt < 2; attempt++) {
 
-        const responseText = await response.text();
-
-        let data;
         try {
-            data = responseText ? JSON.parse(responseText) : null;
-        } catch {
-            data = responseText;
-        }
+            const headers = await getImdHeaders(attempt === 1);
 
-        if (!response.ok) {
-            console.error("IMD API Error:", {
-                status: response.status,
-                response: data
+            const response = await fetch(url, {
+                method: "GET",
+                headers,
+                signal: AbortSignal.timeout(15000)
             });
 
-            const error = new Error(
-                `IMD API request failed with status ${response.status}.`
-            );
+            const responseText = await response.text();
 
-            error.statusCode = 502;
-            error.imdStatus = response.status;
+            let data;
+
+            try {
+                data = responseText
+                    ? JSON.parse(responseText)
+                    : null;
+            } catch {
+                data = responseText;
+            }
+
+            // If token expired unexpectedly, generate a new one
+            if (response.status === 401 && attempt === 0) {
+
+                console.warn(
+                    "IMD returned 401. Refreshing token and retrying..."
+                );
+
+                accessToken = null;
+                tokenExpiresAt = 0;
+
+                continue;
+            }
+
+            if (!response.ok) {
+
+                console.error("IMD API Error:", {
+                    endpoint,
+                    status: response.status,
+                    response: data
+                });
+
+                const error = new Error(
+                    `IMD API request failed with status ${response.status}.`
+                );
+
+                error.statusCode = response.status;
+                throw error;
+            }
+
+            return data;
+
+        } catch (error) {
+
+            if (
+                error.name === "TimeoutError" ||
+                error.name === "AbortError"
+            ) {
+                const timeoutError = new Error(
+                    "IMD API request timed out."
+                );
+
+                timeoutError.statusCode = 504;
+                throw timeoutError;
+            }
+
             throw error;
         }
-
-        return data;
-
-    } catch (error) {
-        if (error.name === "TimeoutError" ||
-            error.name === "AbortError") {
-            const timeoutError = new Error("IMD API request timed out.");
-            timeoutError.statusCode = 504;
-            throw timeoutError;
-        }
-
-        throw error;
     }
+
+    throw new Error(
+        "IMD API request failed after token refresh."
+    );
 };
+
 
 // 1. Current weather
 export const getImdCurrentWeather = (stationId) =>
