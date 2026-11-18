@@ -1,10 +1,18 @@
+
 import { authSchemas, authPaths } from "../auth/auth.dto.js";
 import { cropSchemas, cropPaths } from "../crop/crop.dto.js";
-import { weatherSchemas, weatherPaths, imdSchemas, imdPaths} from "../weather/weather.dto.js";
 
+import {
+    weatherSchemas,
+    weatherPaths
+} from "../weather/weather.dto.js";
+
+import {
+    imdSchemas,
+    imdPaths
+} from "../weather/imd/imd.dto.js";
 
 const swaggerSpec = {
-
     openapi: "3.0.3",
 
     info: {
@@ -15,7 +23,6 @@ const swaggerSpec = {
 
     servers: [
         {
-            //url: "http://20.12.240.74:7000"
             url: process.env.BACKEND_URL
         }
     ],
@@ -24,6 +31,10 @@ const swaggerSpec = {
         {
             name: "Authentication",
             description: "Authentication APIs"
+        },
+        {
+            name: "IMD Weather",
+            description: "India Meteorological Department Weather APIs"
         }
     ],
 
@@ -52,6 +63,9 @@ const swaggerSpec = {
     }
 };
 
-console.log("Swagger registered endpoints:", Object.keys(swaggerSpec.paths));
+console.log(
+    "Swagger registered endpoints:",
+    Object.keys(swaggerSpec.paths)
+);
 
 export default swaggerSpec;

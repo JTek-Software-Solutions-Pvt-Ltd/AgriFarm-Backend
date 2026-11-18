@@ -7,7 +7,8 @@ import {
     imdWarnings,
     imdNowcast,
     imdRainfall,
-    imdAwsData
+    imdAwsData,
+    imdStationMapping
 } from "./imd.controller.js";
 
 const router = express.Router();
@@ -18,5 +19,6 @@ router.get("/warnings", imdWarnings);
 router.get("/nowcast", imdNowcast);
 router.get("/rainfall", imdRainfall);
 router.get("/aws", imdAwsData);
+router.get("/stations", imdStationMapping);
 
 export default router;

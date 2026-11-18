@@ -100,3 +100,10 @@ export const getImdAwsData = ({ stationId, stateId }) =>
         id: stationId,
         sid: stateId
     });
+
+
+// 7. Get all IMD city forecast station mappings
+export const getImdCityForecastMapping = async () => {
+    return await fetchImdData("cityforecast_mapping");
+};
+

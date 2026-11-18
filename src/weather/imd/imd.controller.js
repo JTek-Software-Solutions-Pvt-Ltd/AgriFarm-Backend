@@ -5,7 +5,8 @@ import {
     getImdWarnings,
     getImdNowcast,
     getImdRainfall,
-    getImdAwsData
+    getImdAwsData,
+    getImdCityForecastMapping
 } from "./imd.service.js";
 
 const sendResponse = async (res, message, serviceCall) => {
@@ -134,4 +135,61 @@ export const imdAwsData = (req, res) => {
             stateId: state_id
         })
     );
+};
+
+
+export const imdStationMapping = async (req, res) => {
+    try {
+        const { search } = req.query;
+
+        const mapping = await getImdCityForecastMapping();
+
+        // IMD mapping is expected to return an array.
+        // Also support common wrapped response formats.
+        const stations = Array.isArray(mapping)
+            ? mapping
+            : Array.isArray(mapping?.data)
+                ? mapping.data
+                : Array.isArray(mapping?.Data)
+                    ? mapping.Data
+                    : null;
+
+        if (!stations) {
+            return res.status(502).json({
+                success: false,
+                message: "Unexpected response received from IMD station mapping."
+            });
+        }
+
+        let result = stations;
+
+        if (search && search.trim()) {
+            const keyword = search.trim().toLowerCase();
+
+            result = stations.filter((station) =>
+                String(station.Station_Name || "")
+                    .toLowerCase()
+                    .includes(keyword) ||
+                String(station.Station_Code || "")
+                    .toLowerCase()
+                    .includes(keyword)
+            );
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "IMD station mapping fetched successfully.",
+            provider: "IMD",
+            total: result.length,
+            data: result
+        });
+
+    } catch (error) {
+        console.error("IMD Station Mapping Error:", error.message);
+
+        return res.status(error.statusCode || 502).json({
+            success: false,
+            message: error.message || "Unable to fetch IMD station mapping."
+        });
+    }
 };
