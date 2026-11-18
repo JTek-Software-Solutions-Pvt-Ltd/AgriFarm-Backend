@@ -12,9 +12,9 @@ const getImdHeaders = () => {
         error.statusCode = 500;
         throw error;
     }
-console.log('IMD_API_KEY:', !!process.env.IMD_API_KEY);
-console.log('IMD_JWT_TOKEN:', !!process.env.IMD_JWT_TOKEN);
-console.log('IMD_BASE_URL:', process.env.IMD_BASE_URL);
+    console.log('IMD_API_KEY:', !!process.env.IMD_API_KEY);
+    console.log('IMD_JWT_TOKEN:', !!process.env.IMD_JWT_TOKEN);
+    console.log('IMD_BASE_URL:', process.env.IMD_BASE_URL);
     return {
         "X-API-KEY": apiKey,
         "Authorization": `Bearer ${jwtToken}`,
