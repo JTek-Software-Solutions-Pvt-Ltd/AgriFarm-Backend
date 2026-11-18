@@ -1,6 +1,6 @@
 import { authSchemas, authPaths } from "../auth/auth.dto.js";
 import { cropSchemas, cropPaths } from "../crop/crop.dto.js";
-import { weatherSchemas, weatherPaths} from "../weather/weather.dto.js";
+import { weatherSchemas, weatherPaths, imdSchemas, imdPaths} from "../weather/weather.dto.js";
 
 
 const swaggerSpec = {
@@ -39,14 +39,16 @@ const swaggerSpec = {
         schemas: {
             ...authSchemas,
             ...cropSchemas,
-            ...weatherSchemas
+            ...weatherSchemas,
+            ...imdSchemas
         }
     },
 
     paths: {
         ...authPaths,
         ...cropPaths,
-        ...weatherPaths
+        ...weatherPaths,
+        ...imdPaths
     }
 };
 
