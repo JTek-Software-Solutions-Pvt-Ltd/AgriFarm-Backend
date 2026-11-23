@@ -7,8 +7,14 @@ const normalizeName = (value) =>
         .replace(/\s+/g, " ");
 
 const normalizeState = (value) => {
-    const name = normalizeName(value);
-    return name === "Telangana" ? "Telangana" : name;
+    const state = normalizeName(value);
+
+    const stateAliases = {
+        "orissa": "odisha",
+        "odhisha": "odisha"
+    };
+
+    return stateAliases[state] || state;
 };
 
 const IMD_BASE_URL =
@@ -297,10 +303,8 @@ export const getUserLocation = async (userId) => {
 
 // 9. Find IMD district ID using local district and state
 export const findImdDistrictId = async (districtName, stateName) => {
-    const response = await getImdDistrictMapping();
 
-    console.log("IMD mapping response type:", typeof response);
-    console.log("IMD mapping response keys:", Object.keys(response || {}));
+    const response = await getImdDistrictMapping();
 
     const records = Array.isArray(response)
         ? response
@@ -310,31 +314,37 @@ export const findImdDistrictId = async (districtName, stateName) => {
                 ? response.Data
                 : [];
 
-    console.log("IMD total mapping records:", records.length);
+    const matchedDistrict = records.find(item => {
 
-    // Inspect Puri-related records
-    const puriRecords = records.filter(item =>
-        String(item.District || "").toLowerCase().includes("puri")
-    );
+        const imdDistrict = normalizeName(item.District);
+        const imdState = normalizeState(item.State);
 
-    console.log("IMD Puri records:", puriRecords);
-
-    // Existing matching logic
-    const matchedDistrict = records.find(item =>
-        normalizeName(item.District) === normalizeName(districtName) &&
-        normalizeState(item.State) === normalizeState(stateName)
-    );
+        return (
+            imdDistrict === normalizeName(districtName) &&
+            imdState === normalizeState(stateName)
+        );
+    });
 
     if (!matchedDistrict) {
+        console.log("IMD district not matched:", {
+            districtName,
+            stateName
+        });
+
         return null;
     }
+
+    console.log("Matched IMD district:", {
+        district: matchedDistrict.District,
+        state: matchedDistrict.State,
+        imdDistrictId: matchedDistrict.Obj_id
+    });
 
     return String(
         matchedDistrict.Obj_id ??
         matchedDistrict.OBJ_ID ??
-        matchedDistrict.obj_id ??
-        ""
-    ) || null;
+        matchedDistrict.obj_id
+    );
 };
 
 // 10. Save IMD station and district IDs in users table
