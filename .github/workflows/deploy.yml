@@ -5,14 +5,14 @@ on:
   push:
     branches:
       - main
-      - develop
+      - Develop
 
 permissions:
   contents: read
 
-# Prevent two deployments of the same branch from running at once
+# Both branches use the same folder, so only one deploy can run at a time
 concurrency:
-  group: deploy-${{ github.ref_name }}
+  group: deploy-kisandost
   cancel-in-progress: false
 
 jobs:
@@ -27,19 +27,14 @@ jobs:
           set -e
           BRANCH="${{ github.ref_name }}"
 
-          if [ "$BRANCH" = "main" ]; then
-            echo "APP_DIR=/home/azureuser/kisandost/backend" >> "$GITHUB_ENV"
-            echo "PM2_NAME=kisandost-backend" >> "$GITHUB_ENV"
-            echo "APP_PORT=7000" >> "$GITHUB_ENV"
-          elif [ "$BRANCH" = "develop" ]; then
-            echo "APP_DIR=/home/azureuser/kisandost-develop/backend" >> "$GITHUB_ENV"
-            echo "PM2_NAME=kisandost-backend-develop" >> "$GITHUB_ENV"
-            echo "APP_PORT=7001" >> "$GITHUB_ENV"
-          else
+          if [ "$BRANCH" != "main" ] && [ "$BRANCH" != "Develop" ]; then
             echo "Branch '$BRANCH' is not configured for deployment."
             exit 1
           fi
 
+          echo "APP_DIR=/home/azureuser/kisandost/backend" >> "$GITHUB_ENV"
+          echo "PM2_NAME=kisandost-backend" >> "$GITHUB_ENV"
+          echo "APP_PORT=7000" >> "$GITHUB_ENV"
           echo "DEPLOY_BRANCH=$BRANCH" >> "$GITHUB_ENV"
 
       - name: Configure SSH
@@ -81,11 +76,8 @@ jobs:
           echo "Fetching latest GitHub code for $BRANCH..."
           git fetch origin "$BRANCH"
 
-          echo "Switching to $BRANCH..."
-          git checkout "$BRANCH"
-
-          echo "Updating application to origin/$BRANCH..."
-          git merge --ff-only "origin/$BRANCH"
+          echo "Switching to $BRANCH and updating to origin/$BRANCH..."
+          git checkout -B "$BRANCH" "origin/$BRANCH"
 
           echo "Installing production dependencies..."
           npm install --omit=dev
