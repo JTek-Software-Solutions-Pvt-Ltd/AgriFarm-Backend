@@ -204,11 +204,12 @@ export const fetchImdData = async (endpoint, params = {}) => {
             }
 
             if (!response.ok) {
+                const errorBody = await response.text();
 
-                console.error("IMD API Error:", {
+                console.error("IMD API error:", {
                     endpoint,
                     status: response.status,
-                    response: data
+                    response: errorBody
                 });
 
                 const error = new Error(
