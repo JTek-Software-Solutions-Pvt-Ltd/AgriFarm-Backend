@@ -1,4 +1,3 @@
-
 name: Deploy Kisan Dost Backend
 
 on:
@@ -6,16 +5,38 @@ on:
   push:
     branches:
       - main
+      - Develop
 
 permissions:
   contents: read
 
+# Both branches use the same folder, so only one deploy can run at a time
+concurrency:
+  group: deploy-kisandost
+  cancel-in-progress: false
+
 jobs:
   deploy:
-    name: Deploy to Azure VM
+    name: Deploy ${{ github.ref_name }} to Azure VM
     runs-on: ubuntu-latest
 
     steps:
+      - name: Set environment based on branch
+        shell: bash
+        run: |
+          set -e
+          BRANCH="${{ github.ref_name }}"
+
+          if [ "$BRANCH" != "main" ] && [ "$BRANCH" != "Develop" ]; then
+            echo "Branch '$BRANCH' is not configured for deployment."
+            exit 1
+          fi
+
+          echo "APP_DIR=/home/azureuser/kisandost/backend" >> "$GITHUB_ENV"
+          echo "PM2_NAME=kisandost-backend" >> "$GITHUB_ENV"
+          echo "APP_PORT=7000" >> "$GITHUB_ENV"
+          echo "DEPLOY_BRANCH=$BRANCH" >> "$GITHUB_ENV"
+
       - name: Configure SSH
         shell: bash
         env:
@@ -45,25 +66,30 @@ jobs:
           cat > /tmp/deploy_remote.sh <<'REMOTE_SCRIPT'
           set -euo pipefail
 
-          cd /home/azureuser/kisandost/backend
+          APP_DIR="$1"
+          BRANCH="$2"
+          PM2_NAME="$3"
+          APP_PORT="$4"
 
-          echo "Fetching latest GitHub code..."
-          git fetch origin main
+          cd "$APP_DIR"
 
-          echo "Updating application to origin/main..."
-          git merge --ff-only origin/main
+          echo "Fetching latest GitHub code for $BRANCH..."
+          git fetch origin "$BRANCH"
+
+          echo "Switching to $BRANCH and updating to origin/$BRANCH..."
+          git checkout -B "$BRANCH" "origin/$BRANCH"
 
           echo "Installing production dependencies..."
           npm install --omit=dev
 
-          echo "Restarting backend..."
-          pm2 restart kisandost-backend --update-env
+          echo "Restarting backend ($PM2_NAME)..."
+          pm2 restart "$PM2_NAME" --update-env
 
-          echo "Waiting for backend..."
+          echo "Waiting for backend on port $APP_PORT..."
           ready=0
 
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:7000/api-docs/ -o /dev/null; then
+            if curl -fsS "http://127.0.0.1:${APP_PORT}/api-docs/" -o /dev/null; then
               ready=1
               break
             fi
@@ -72,7 +98,7 @@ jobs:
 
           if [ "$ready" -ne 1 ]; then
             echo "Backend did not become ready."
-            pm2 logs kisandost-backend --lines 50 --nostream
+            pm2 logs "$PM2_NAME" --lines 50 --nostream
             exit 1
           fi
 
@@ -82,10 +108,8 @@ jobs:
           echo "Deployment successful!"
           REMOTE_SCRIPT
 
-          echo "Connecting to Azure VM..."
-
           ssh -i "$HOME/.ssh/deploy_key" \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
-            "$VM_USER@$VM_HOST" 'bash -s' < /tmp/deploy_remote.sh
+            "$VM_USER@$VM_HOST" \
+            "bash -s -- '$APP_DIR' '$DEPLOY_BRANCH' '$PM2_NAME' '$APP_PORT'" \
+            < /tmp/deploy_remote.sh
