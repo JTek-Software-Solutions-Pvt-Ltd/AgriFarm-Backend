@@ -172,44 +172,28 @@ export const fetchImdData = async (endpoint, params = {}) => {
         try {
             const headers = await getImdHeaders(attempt === 1);
 
-            const response = await fetch(url, {
+           const response = await fetch(url, {
                 method: "GET",
                 headers,
                 signal: AbortSignal.timeout(15000)
             });
 
+            // Read the response body only once
             const responseText = await response.text();
 
-            let data;
+            let responseData;
 
             try {
-                data = responseText
-                    ? JSON.parse(responseText)
-                    : null;
+                responseData = responseText ? JSON.parse(responseText) : null;
             } catch {
-                data = responseText;
-            }
-
-            // If token expired unexpectedly, generate a new one
-            if (response.status === 401 && attempt === 0) {
-
-                console.warn(
-                    "IMD returned 401. Refreshing token and retrying..."
-                );
-
-                accessToken = null;
-                tokenExpiresAt = 0;
-
-                continue;
+                responseData = responseText;
             }
 
             if (!response.ok) {
-                const errorBody = await response.text();
-
                 console.error("IMD API error:", {
                     endpoint,
                     status: response.status,
-                    response: errorBody
+                    response: responseData
                 });
 
                 const error = new Error(
@@ -217,10 +201,13 @@ export const fetchImdData = async (endpoint, params = {}) => {
                 );
 
                 error.statusCode = response.status;
+                error.details = responseData;
+
                 throw error;
             }
 
-            return data;
+            return responseData;
+           
 
         } catch (error) {
 
