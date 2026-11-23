@@ -121,24 +121,30 @@ export const imdRainfall = (req, res) => {
     );
 };
 
-export const imdAwsData = (req, res) => {
-    const { station_id, state_id } = req.query;
+export const imdAwsData = async (req, res) => {
+    try {
+        const { station_id, state_id } = req.query;
 
-    if (!validateId(station_id) && !validateId(state_id)) {
-        return res.status(400).json({
+        const data = await getImdAwsData({
+            callSign: station_id || null,
+            imdStateId: state_id || null
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "IMD AWS/ARG data fetched successfully.",
+            provider: "IMD",
+            data
+        });
+
+    } catch (error) {
+        console.error("IMD AWS error:", error);
+
+        return res.status(error.statusCode || 500).json({
             success: false,
-            message: "Provide a valid station_id or state_id."
+            message: error.message
         });
     }
-
-    return sendResponse(
-        res,
-        "IMD AWS/ARG data fetched successfully.",
-        () => getImdAwsData({
-            stationId: station_id,
-            stateId: state_id
-        })
-    );
 };
 
 // Calculate distance between two coordinates (Haversine formula)
