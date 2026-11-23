@@ -1,10 +1,13 @@
 import pool from "../../config/db.js";
 
-const normalizeName = (value) =>
-    String(value || "")
+const normalizeName = (value) => {
+    return String(value || "")
         .trim()
         .toLowerCase()
-        .replace(/\s+/g, " ");
+        .replace(/\bdistrict\b/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+};
 
 const normalizeState = (value) => {
     const state = normalizeName(value);
