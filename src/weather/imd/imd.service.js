@@ -263,12 +263,25 @@ export const getImdRainfall = (districtId) =>
     fetchImdData("districtrainfall", { id: districtId });
 
 // 6. AWS/ARG observations
-export const getImdAwsData = ({ stationId, stateId }) =>
-    fetchImdData("aws_data", {
-        id: stationId,
-        sid: stateId
-    });
+export const getImdAwsData = ({ callSign, imdStateId } = {}) => {
 
+    if (callSign) {
+        return fetchImdData("aws_data", {
+            id: callSign
+        });
+    }
+
+    if (imdStateId) {
+        return fetchImdData("aws_data", {
+            sid: imdStateId
+        });
+    }
+
+    throw new Error("AWS station CALL_SIGN or IMD state ID is required.");
+};
+
+export const getImdAwsMapping = () =>
+    fetchImdData("aws_data_mapping");
 
 // 7. Get all IMD city forecast station mappings
 export const getImdCityForecastMapping = async () => {
