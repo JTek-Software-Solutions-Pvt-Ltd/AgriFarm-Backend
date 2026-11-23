@@ -410,7 +410,7 @@ export const updateUserLocationFromCoordinates = async ({
     );
 
     if (!stateResult.rows.length) {
-        throw new Error(`State is not found: ${location.stateName}`);
+        throw new Error(`State not found: ${location.stateName}`);
     }
 
     const state = stateResult.rows[0];
