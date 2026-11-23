@@ -296,11 +296,11 @@ export const getUserLocation = async (userId) => {
 };
 
 // 9. Find IMD district ID using local district and state
-export const findImdDistrictId = async (
-    districtName,
-    stateName
-) => {
+export const findImdDistrictId = async (districtName, stateName) => {
     const response = await getImdDistrictMapping();
+
+    console.log("IMD mapping response type:", typeof response);
+    console.log("IMD mapping response keys:", Object.keys(response || {}));
 
     const records = Array.isArray(response)
         ? response
@@ -310,19 +310,31 @@ export const findImdDistrictId = async (
                 ? response.Data
                 : [];
 
-    const matchedDistrict = records.find((item) =>
+    console.log("IMD total mapping records:", records.length);
+
+    // Inspect Puri-related records
+    const puriRecords = records.filter(item =>
+        String(item.District || "").toLowerCase().includes("puri")
+    );
+
+    console.log("IMD Puri records:", puriRecords);
+
+    // Existing matching logic
+    const matchedDistrict = records.find(item =>
         normalizeName(item.District) === normalizeName(districtName) &&
         normalizeState(item.State) === normalizeState(stateName)
     );
 
-    const imdDistrictId =
-        matchedDistrict?.Obj_id ??
-        matchedDistrict?.OBJ_ID ??
-        null;
+    if (!matchedDistrict) {
+        return null;
+    }
 
-    return imdDistrictId !== null
-        ? String(imdDistrictId)
-        : null;
+    return String(
+        matchedDistrict.Obj_id ??
+        matchedDistrict.OBJ_ID ??
+        matchedDistrict.obj_id ??
+        ""
+    ) || null;
 };
 
 // 10. Save IMD station and district IDs in users table
