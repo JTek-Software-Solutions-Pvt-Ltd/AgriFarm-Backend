@@ -8,7 +8,7 @@ const normalizeName = (value) =>
 
 const normalizeState = (value) => {
     const name = normalizeName(value);
-    return name === "orissa" ? "odisha" : name;
+    return name === "Telangana" ? "Telangana" : name;
 };
 
 const IMD_BASE_URL =
