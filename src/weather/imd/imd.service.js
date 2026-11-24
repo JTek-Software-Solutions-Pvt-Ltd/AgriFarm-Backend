@@ -156,6 +156,7 @@ export const fetchImdData = async (endpoint, params = {}) => {
         try {
             // First attempt: use cached token
             // Second attempt: force generate a fresh token
+            console.log('attempt====', attempt);
             const headers = await getImdHeaders(attempt === 1);
 
             const response = await fetch(url, {
