@@ -81,7 +81,6 @@ export const imdWarnings = (req, res) => {
             message: "Valid district_id is required."
         });
     }
-
     return sendResponse(
         res,
         "IMD district warnings fetched successfully.",
