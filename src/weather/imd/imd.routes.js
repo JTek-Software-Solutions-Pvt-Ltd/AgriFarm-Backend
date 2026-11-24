@@ -28,6 +28,10 @@ router.get(
 
 router.get(
     "/current",
+    (req, res, next) => {
+        console.log("CURRENT ROUTE HIT");
+        next();
+    },
     authenticateToken,
     imdCurrentWeather
 );
