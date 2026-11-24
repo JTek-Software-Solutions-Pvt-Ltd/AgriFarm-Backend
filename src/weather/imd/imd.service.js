@@ -253,8 +253,8 @@ export const fetchImdData = async (endpoint, params = {}) => {
 
 
 // 1. Current weather
-export const getImdCurrentWeather = (stationId) =>
-    fetchImdData("current_wx", { id: stationId });
+export const getImdCurrentWeather = () =>
+    fetchImdData("current_wx");
 
 // 2. Seven-day forecast
 export const getImdForecast = (stationId) =>
