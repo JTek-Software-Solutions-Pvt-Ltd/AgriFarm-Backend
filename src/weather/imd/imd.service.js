@@ -153,6 +153,7 @@ const getImdHeaders = async (forceRefresh = false) => {
 
 
 // Fetch IMD API data with automatic token refresh
+
 export const fetchImdData = async (endpoint, params = {}) => {
 
     const url = new URL(`${IMD_BASE_URL}/${endpoint}`);
@@ -170,28 +171,42 @@ export const fetchImdData = async (endpoint, params = {}) => {
     for (let attempt = 0; attempt < 2; attempt++) {
 
         try {
+            // First attempt: use cached token
+            // Second attempt: force generate a fresh token
             const headers = await getImdHeaders(attempt === 1);
 
-           const response = await fetch(url, {
+            const response = await fetch(url, {
                 method: "GET",
                 headers,
                 signal: AbortSignal.timeout(15000)
             });
 
-            // Read the response body only once
+            // Read response body only once
             const responseText = await response.text();
 
             let responseData;
 
             try {
-                responseData = responseText ? JSON.parse(responseText) : null;
+                responseData = responseText
+                    ? JSON.parse(responseText)
+                    : null;
             } catch {
                 responseData = responseText;
             }
 
+            // Retry once if the access token has expired
+            if (response.status === 401 && attempt === 0) {
+                console.warn(
+                    `IMD API returned 401 for ${endpoint}. Refreshing token...`
+                );
+                continue;
+            }
+
+            // Handle other unsuccessful responses
             if (!response.ok) {
                 console.error("IMD API error:", {
                     endpoint,
+                    url: url.toString(),
                     status: response.status,
                     response: responseData
                 });
@@ -207,7 +222,6 @@ export const fetchImdData = async (endpoint, params = {}) => {
             }
 
             return responseData;
-           
 
         } catch (error) {
 
@@ -227,10 +241,15 @@ export const fetchImdData = async (endpoint, params = {}) => {
         }
     }
 
-    throw new Error(
+    const error = new Error(
         "IMD API request failed after token refresh."
     );
+
+    error.statusCode = 401;
+
+    throw error;
 };
+
 
 
 // 1. Current weather
