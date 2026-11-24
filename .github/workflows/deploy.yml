@@ -6,11 +6,12 @@ on:
     branches:
       - main
       - Develop
+      - Stage
 
 permissions:
   contents: read
 
-# Both branches use the same folder, so only one deploy can run at a time
+# All branches use the same folder, so only one deploy can run at a time
 concurrency:
   group: deploy-kisandost
   cancel-in-progress: false
@@ -27,10 +28,13 @@ jobs:
           set -e
           BRANCH="${{ github.ref_name }}"
 
-          if [ "$BRANCH" != "main" ] && [ "$BRANCH" != "Develop" ]; then
-            echo "Branch '$BRANCH' is not configured for deployment."
-            exit 1
-          fi
+          case "$BRANCH" in
+            main|Develop|Stage) ;;
+            *)
+              echo "Branch '$BRANCH' is not configured for deployment."
+              exit 1
+              ;;
+          esac
 
           echo "APP_DIR=/home/azureuser/kisandost/backend" >> "$GITHUB_ENV"
           echo "PM2_NAME=kisandost-backend" >> "$GITHUB_ENV"
