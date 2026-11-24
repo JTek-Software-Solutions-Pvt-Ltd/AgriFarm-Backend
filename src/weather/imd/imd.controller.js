@@ -39,15 +39,24 @@ const validateId = (value) =>
 
 export const imdCurrentWeather = async (req, res, next) => {
     try {
+        console.log("1. IMD Current Weather Controller called");
+
         const userId = req.user?.userId;
         let stationId = req.query.station_id || null;
+
+        console.log("2. User ID:", userId);
+        console.log("3. Requested station ID:", stationId);
 
         if (!stationId && userId) {
             const user = await getUserLocation(userId);
             stationId = user?.current_weather_station_id || null;
         }
 
+        console.log("4. Final station ID:", stationId);
+
         const data = await getImdCurrentWeather(stationId);
+
+        console.log("5. IMD service response received");
 
         return res.status(200).json({
             success: true,
@@ -58,8 +67,8 @@ export const imdCurrentWeather = async (req, res, next) => {
             station_id: stationId,
             data
         });
-
     } catch (error) {
+        console.error("IMD Current Weather Error:", error);
         next(error);
     }
 };
