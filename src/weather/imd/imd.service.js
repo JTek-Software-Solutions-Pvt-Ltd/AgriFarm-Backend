@@ -138,7 +138,7 @@ console.log('token===', token);
 // Fetch IMD API data with automatic token refresh
 
 export const fetchImdData = async (endpoint, params = {}) => {
-
+    console.log(endpoint,"=======");
     const url = new URL(`${IMD_BASE_URL}/${endpoint}`);
 
     Object.entries(params).forEach(([key, value]) => {
