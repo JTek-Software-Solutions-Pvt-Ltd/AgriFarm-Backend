@@ -115,14 +115,17 @@ const getImdAccessToken = async (forceRefresh = false) => {
 
 // Generate headers for IMD weather APIs
 const getImdHeaders = async (forceRefresh = false) => {
-
     const apiKey = process.env.IMD_API_KEY;
 
-    if (!apiKey) {
+    /*if (!apiKey) {
         throw new Error("IMD API key is missing.");
-    }
+    }*/
 
     const token = await getImdAccessToken(forceRefresh);
+
+    if (!token) {
+        throw new Error("IMD access token is missing.");
+    }
 
     return {
         "X-API-KEY": apiKey,
