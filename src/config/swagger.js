@@ -27,6 +27,12 @@ const swaggerSpec = {
         }
     ],
 
+    security: [
+        {
+            bearerAuth: []
+        }
+    ],
+
     tags: [
         {
             name: "Authentication",
@@ -46,11 +52,7 @@ const swaggerSpec = {
                 bearerFormat: "JWT"
             }
         },
-        security: [
-            {
-                bearerAuth: []
-            }
-        ],
+
         schemas: {
             ...authSchemas,
             ...cropSchemas,
