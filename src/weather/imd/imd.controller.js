@@ -53,7 +53,7 @@ export const imdCurrentWeather = async (req, res, next) => {
     } catch (error) {
         next(error);
     }
-};
+}; 
 
 export const imdForecast = (req, res) => {
     const { station_id } = req.query;
