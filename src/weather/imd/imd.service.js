@@ -122,7 +122,7 @@ const getImdHeaders = async (forceRefresh = false) => {
     }*/
 
     const token = await getImdAccessToken(forceRefresh);
-
+console.log('token===', token);
     if (!token) {
         throw new Error("IMD access token is missing.");
     }
