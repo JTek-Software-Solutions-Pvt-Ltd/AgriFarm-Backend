@@ -1,42 +1,5 @@
 import pool from "../../config/db.js";
 
-const normalizeName = (value) => {
-    return String(value || "")
-        .toLowerCase()
-        .trim()
-        .replace(/\bdistrict\b/g, "")
-        .replace(/[^a-z0-9]/g, "");
-};
-
-const districtAliases = {
-    "sripottisriramulunellore": "sripottisriramulunellore",
-    "sripottisriramulunellore": "sripottisriramulunellore"
-};
-
-const normalizeDistrict = (value) => {
-    const normalized = normalizeName(value);
-
-    if (
-        normalized === "sripottisriramulunellore" ||
-        normalized === "sripottisriramulunellore"
-    ) {
-        return "sripottisriramulunellore";
-    }
-
-    return normalized;
-};
-
-const normalizeState = (value) => {
-    const state = normalizeName(value);
-
-    const stateAliases = {
-        "orissa": "odisha",
-        "odhisha": "odisha"
-    };
-
-    return stateAliases[state] || state;
-};
-
 const IMD_BASE_URL =
     process.env.IMD_BASE_URL || "https://api.imd.gov.in/api/v1";
 
@@ -351,43 +314,120 @@ export const getUserLocation = async (userId) => {
 };
 
 // 9. Find IMD district ID using local district and state
+
+const normalizeName = (value) => {
+    return String(value || "")
+        .toLowerCase()
+        .trim()
+        .replace(/\bdistrict\b/g, "")
+        .replace(/[^a-z0-9]/g, "");
+};
+
+const normalizeState = (value) => {
+    const normalized = normalizeName(value);
+
+    const stateAliases = {
+        orissa: "odisha",
+        odhisha: "odisha"
+    };
+
+    return stateAliases[normalized] || normalized;
+};
+
+// Add aliases only for known spelling variations.
+const districtAliases = {
+    "sripottisriramulunellore": "nellore",
+    "sripottisriramulunellore": "nellore",
+    "spsrnellore": "nellore"
+};
+
+const normalizeDistrict = (value) => {
+    const normalized = normalizeName(value);
+
+    return districtAliases[normalized] || normalized;
+};
+
 export const findImdDistrictId = async (
     districtName,
     stateName
 ) => {
-    const response = await getImdDistrictMapping();
+    try {
+        if (!districtName || !stateName) {
+            return null;
+        }
 
-    const records = Array.isArray(response)
-        ? response
-        : Array.isArray(response?.data)
-            ? response.data
-            : Array.isArray(response?.Data)
-                ? response.Data
-                : [];
+        const response = await getImdDistrictMapping();
 
-    const matchedDistrict = records.find(item =>
-        normalizeName(item.District) === normalizeName(districtName) &&
-        normalizeState(item.State) === normalizeState(stateName)
-    );
+        const records = Array.isArray(response)
+            ? response
+            : Array.isArray(response?.data)
+                ? response.data
+                : Array.isArray(response?.Data)
+                    ? response.Data
+                    : [];
 
-    if (!matchedDistrict) {
-        console.log("IMD district not matched:", {
-            districtName,
-            stateName
+        const targetDistrict = normalizeDistrict(districtName);
+        const targetState = normalizeState(stateName);
+
+        // First try exact normalized district and state matching.
+        let matchedDistrict = records.find(item =>
+            normalizeDistrict(item.District) === targetDistrict &&
+            normalizeState(item.State) === targetState
+        );
+
+        // Fallback: compare district names without the alias mapping.
+        if (!matchedDistrict) {
+            matchedDistrict = records.find(item =>
+                normalizeName(item.District) === normalizeName(districtName) &&
+                normalizeState(item.State) === targetState
+            );
+        }
+
+        if (!matchedDistrict) {
+            console.log("IMD district not matched:", {
+                localDistrict: districtName,
+                localState: stateName,
+                normalizedDistrict: targetDistrict,
+                normalizedState: targetState,
+                possibleMatches: records
+                    .filter(item =>
+                        normalizeState(item.State) === targetState
+                    )
+                    .map(item => ({
+                        district: item.District,
+                        state: item.State,
+                        obj_id: item.Obj_id ?? item.OBJ_ID ?? item.obj_id
+                    }))
+            });
+
+            return null;
+        }
+
+        const id =
+            matchedDistrict.Obj_id ??
+            matchedDistrict.OBJ_ID ??
+            matchedDistrict.obj_id;
+
+        if (id === undefined || id === null || id === "") {
+            console.log("IMD district matched but ID missing:", matchedDistrict);
+            return null;
+        }
+
+        console.log("IMD district matched:", {
+            localDistrict: districtName,
+            imdDistrict: matchedDistrict.District,
+            state: matchedDistrict.State,
+            imdDistrictId: String(id)
         });
 
-        return null;
+        return String(id);
+
+    } catch (error) {
+        console.error("findImdDistrictId error:", error.message);
+        throw error;
     }
-
-    const id =
-        matchedDistrict.Obj_id ??
-        matchedDistrict.OBJ_ID ??
-        matchedDistrict.obj_id;
-
-    return id !== undefined && id !== null
-        ? String(id)
-        : null;
 };
+
 
 // 10. Save IMD station and district IDs in users table
 export const saveUserImdMapping = async ({
