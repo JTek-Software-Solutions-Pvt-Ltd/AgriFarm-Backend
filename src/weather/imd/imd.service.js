@@ -2,11 +2,28 @@ import pool from "../../config/db.js";
 
 const normalizeName = (value) => {
     return String(value || "")
-        .trim()
         .toLowerCase()
+        .trim()
         .replace(/\bdistrict\b/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
+        .replace(/[^a-z0-9]/g, "");
+};
+
+const districtAliases = {
+    "sripottisriramulunellore": "sripottisriramulunellore",
+    "sripottisriramulunellore": "sripottisriramulunellore"
+};
+
+const normalizeDistrict = (value) => {
+    const normalized = normalizeName(value);
+
+    if (
+        normalized === "sripottisriramulunellore" ||
+        normalized === "sripottisriramulunellore"
+    ) {
+        return "sripottisriramulunellore";
+    }
+
+    return normalized;
 };
 
 const normalizeState = (value) => {
