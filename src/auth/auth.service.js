@@ -427,7 +427,9 @@ export const getUserProfile = async (userId) => {
             u.village,
             u.pincode,
             u.longitude,
-            u.latitude
+            u.latitude,
+            u.imd_district_id,
+            u.city_forecast_station_code
         FROM users u
         LEFT JOIN crop c
             ON c.id = u.crop_id
