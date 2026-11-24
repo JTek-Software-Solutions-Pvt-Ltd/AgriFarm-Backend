@@ -312,13 +312,19 @@ export const getUserLocation = async (userId) => {
             u.id AS user_id,
             u.state_id,
             u.district_id,
+            u.latitude,
+            u.longitude,
+            u.station_id,
+            u.city_forecast_station_code,
+            u.current_weather_station_id,
+            u.imd_district_id,
+            u.aws_call_sign,
+            s.imd_state_id,
             d.name AS district_name,
             s.name AS state_name
          FROM users u
-         LEFT JOIN districts d
-            ON d.id = u.district_id
-         LEFT JOIN state s
-            ON s.id = u.state_id
+         LEFT JOIN districts d ON d.id = u.district_id
+         LEFT JOIN state s ON s.id = u.state_id
          WHERE u.id = $1
          LIMIT 1`,
         [userId]
@@ -328,8 +334,10 @@ export const getUserLocation = async (userId) => {
 };
 
 // 9. Find IMD district ID using local district and state
-export const findImdDistrictId = async (districtName, stateName) => {
-
+export const findImdDistrictId = async (
+    districtName,
+    stateName
+) => {
     const response = await getImdDistrictMapping();
 
     const records = Array.isArray(response)
@@ -340,16 +348,10 @@ export const findImdDistrictId = async (districtName, stateName) => {
                 ? response.Data
                 : [];
 
-    const matchedDistrict = records.find(item => {
-
-        const imdDistrict = normalizeName(item.District);
-        const imdState = normalizeState(item.State);
-
-        return (
-            imdDistrict === normalizeName(districtName) &&
-            imdState === normalizeState(stateName)
-        );
-    });
+    const matchedDistrict = records.find(item =>
+        normalizeName(item.District) === normalizeName(districtName) &&
+        normalizeState(item.State) === normalizeState(stateName)
+    );
 
     if (!matchedDistrict) {
         console.log("IMD district not matched:", {
@@ -360,37 +362,40 @@ export const findImdDistrictId = async (districtName, stateName) => {
         return null;
     }
 
-    console.log("Matched IMD district:", {
-        district: matchedDistrict.District,
-        state: matchedDistrict.State,
-        imdDistrictId: matchedDistrict.Obj_id
-    });
-
-    return String(
+    const id =
         matchedDistrict.Obj_id ??
         matchedDistrict.OBJ_ID ??
-        matchedDistrict.obj_id
-    );
+        matchedDistrict.obj_id;
+
+    return id !== undefined && id !== null
+        ? String(id)
+        : null;
 };
 
 // 10. Save IMD station and district IDs in users table
 export const saveUserImdMapping = async ({
     userId,
-    stationId,
+    cityForecastStationCode,
+    currentWeatherStationId = null,
     imdDistrictId
 }) => {
     const result = await pool.query(
         `UPDATE users
          SET
             station_id = $1,
-            imd_district_id = $2
-         WHERE id = $3
+            city_forecast_station_code = $1,
+            current_weather_station_id = $2,
+            imd_district_id = $3
+         WHERE id = $4
          RETURNING
             id,
             station_id,
+            city_forecast_station_code,
+            current_weather_station_id,
             imd_district_id`,
         [
-            stationId,
+            cityForecastStationCode,
+            currentWeatherStationId,
             imdDistrictId,
             userId
         ]
@@ -446,37 +451,48 @@ export const updateUserLocationFromCoordinates = async ({
     );
 
     if (!location.stateName || !location.districtName) {
-        throw new Error("State or district could not be identified.");
+        throw new Error(
+            "State or district could not be identified from coordinates."
+        );
     }
 
+    // Find state after normalizing both names
     const stateResult = await pool.query(
         `SELECT id, name
-         FROM state
-         WHERE LOWER(TRIM(name)) = $1
-         LIMIT 1`,
-        [normalizeState(location.stateName)]
+         FROM state`
     );
 
-    if (!stateResult.rows.length) {
-        throw new Error(`State not found: ${location.stateName}`);
+    const state = stateResult.rows.find(
+        item =>
+            normalizeState(item.name) ===
+            normalizeState(location.stateName)
+    );
+
+    if (!state) {
+        throw new Error(
+            `State not found in local database: ${location.stateName}`
+        );
     }
 
-    const state = stateResult.rows[0];
-
+    // Find district only within the matched state
     const districtResult = await pool.query(
         `SELECT id, name
          FROM districts
-         WHERE state_id = $1
-           AND LOWER(TRIM(name)) = $2
-         LIMIT 1`,
-        [state.id, normalizeName(location.districtName)]
+         WHERE state_id = $1`,
+        [state.id]
     );
 
-    if (!districtResult.rows.length) {
-        throw new Error(`District not found: ${location.districtName}`);
-    }
+    const district = districtResult.rows.find(
+        item =>
+            normalizeName(item.name) ===
+            normalizeName(location.districtName)
+    );
 
-    const district = districtResult.rows[0];
+    if (!district) {
+        throw new Error(
+            `District not found in local database: ${location.districtName}`
+        );
+    }
 
     const updateResult = await pool.query(
         `UPDATE users
@@ -485,8 +501,19 @@ export const updateUserLocationFromCoordinates = async ({
              latitude = $3,
              longitude = $4
          WHERE id = $5
-         RETURNING id, state_id, district_id, latitude, longitude`,
-        [state.id, district.id, latitude, longitude, userId]
+         RETURNING
+            id,
+            state_id,
+            district_id,
+            latitude,
+            longitude`,
+        [
+            state.id,
+            district.id,
+            latitude,
+            longitude,
+            userId
+        ]
     );
 
     if (!updateResult.rows.length) {
@@ -498,4 +525,75 @@ export const updateUserLocationFromCoordinates = async ({
         state_name: state.name,
         district_name: district.name
     };
+};
+
+const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
+    const toRadians = value => value * Math.PI / 180;
+    const earthRadiusKm = 6371;
+
+    const dLat = toRadians(lat2 - lat1);
+    const dLon = toRadians(lon2 - lon1);
+
+    const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRadians(lat1)) *
+        Math.cos(toRadians(lat2)) *
+        Math.sin(dLon / 2) ** 2;
+
+    return 2 * earthRadiusKm *
+        Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+export const getNearestCurrentWeatherStation = async (
+    latitude,
+    longitude
+) => {
+    const result = await pool.query(
+        `SELECT
+            station_id,
+            station_name,
+            latitude,
+            longitude
+         FROM imd_current_weather_stations
+         WHERE is_active = TRUE`
+    );
+
+    if (!result.rows.length) {
+        return null;
+    }
+
+    const stations = result.rows.map(station => {
+        const distance = calculateDistanceKm(
+            Number(latitude),
+            Number(longitude),
+            Number(station.latitude),
+            Number(station.longitude)
+        );
+
+        return {
+            station_id: station.station_id,
+            station_name: station.station_name,
+            latitude: Number(station.latitude),
+            longitude: Number(station.longitude),
+            distance_km: Number(distance.toFixed(2))
+        };
+    });
+
+    stations.sort(
+        (a, b) => a.distance_km - b.distance_km
+    );
+
+    return stations[0];
+};
+
+export const getImdStateIdByLocalStateId = async (localStateId) => {
+    const result = await pool.query(
+        `SELECT imd_state_id
+         FROM state
+         WHERE id = $1
+         LIMIT 1`,
+        [localStateId]
+    );
+
+    return result.rows[0]?.imd_state_id || null;
 };
