@@ -36,21 +36,23 @@ const validateId = (value) =>
     value.trim().length > 0 &&
     value.length <= 100;
 
-export const imdCurrentWeather = (req, res) => {
-    const { station_id } = req.query;
+export const imdCurrentWeather = async (req, res, next) => {
+    try {
+        const { station_id } = req.query;
 
-    if (!validateId(station_id)) {
-        return res.status(400).json({
-            success: false,
-            message: "Valid station_id is required."
+        const data = await getImdCurrentWeather(
+            station_id || null
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "IMD current weather fetched successfully.",
+            provider: "IMD",
+            data
         });
+    } catch (error) {
+        next(error);
     }
-
-    return sendResponse(
-        res,
-        "IMD current weather fetched successfully.",
-        () => getImdCurrentWeather(station_id)
-    );
 };
 
 export const imdForecast = (req, res) => {
